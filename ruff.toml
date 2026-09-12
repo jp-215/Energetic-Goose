@@ -1,0 +1,9 @@
+line-length = 100
+target-version = "py312"
+
+[lint]
+# Pinned so local runs and CI agree regardless of user-level ruff config.
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+# The services intentionally catch broad exceptions at the model-call boundary
+# and keep Optional[...] typing style consistent with the notebook prototype.
+ignore = ["UP006", "UP035", "UP045", "B008"]
