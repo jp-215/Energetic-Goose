@@ -1,4 +1,4 @@
-"""Workspace export + GitHub publish for Coding Hub runs.
+"""Workspace export + GitHub publish for The Firm runs.
 
 Agent output is assembled in memory during a run; export writes it to
 <repo root>/workspaces/<run_id>/ and publish turns that directory into a
@@ -108,8 +108,8 @@ async def publish_workspace(run_id: str, repo_name: str, private: bool = True,
     status = await _run([git, "status", "--porcelain"], target)
     if status:
         await _run(
-            [git, "-c", "user.name=AI Court Coding Hub", "-c", "user.email=hub@ai-court.local",
-             "commit", "-q", "-m", f"Coding Hub run {run_id}"],
+            [git, "-c", "user.name=AI Court — The Firm", "-c", "user.email=hub@ai-court.local",
+             "commit", "-q", "-m", f"The Firm run {run_id}"],
             target,
         )
 

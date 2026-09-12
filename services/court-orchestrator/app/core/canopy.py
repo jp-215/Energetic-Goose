@@ -164,7 +164,7 @@ async def call_role_model(
     )
 
 
-# ---- Generic chat call (Coding Hub) -----------------------------------------
+# ---- Generic chat call (The Firm) -----------------------------------------
 
 
 @dataclass

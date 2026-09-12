@@ -32,7 +32,7 @@ async function postJson<T>(url: string, payload: unknown, label: string): Promis
 }
 
 /** POSTs a payload and dispatches each NDJSON line from the response stream
- * the moment it arrives. Shared by the court and the coding hub. */
+ * the moment it arrives. Shared by the court and The Firm. */
 async function streamNdjson<E>(
   url: string,
   payload: unknown,
@@ -77,7 +77,7 @@ export function streamCase(payload: CasePayload, onEvent: (event: CourtEvent) =>
   return streamNdjson<CourtEvent>('/api/court/run/stream', payload, 'Court stream failed', onEvent)
 }
 
-// ---- Coding Hub ------------------------------------------------------------------
+// ---- The Firm ------------------------------------------------------------------
 
 export interface HubPayload {
   title: string

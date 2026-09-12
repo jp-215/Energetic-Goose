@@ -41,7 +41,7 @@ export type CourtEvent =
   | { event: 'case_closed'; response: CaseResponse }
   | { event: 'error'; detail: string }
 
-// ---- Coding Hub --------------------------------------------------------------
+// ---- The Firm --------------------------------------------------------------
 
 export type HubRole = 'planner' | 'engineer' | 'integrator'
 

@@ -1,4 +1,4 @@
-"""Coding Hub business logic.
+"""The Firm business logic.
 
 Lifecycle (every step is emitted as a trace event so the UI can show it):
 

@@ -1,4 +1,4 @@
-"""Pydantic data-validation models for the Coding Hub (multi-agent dev team)."""
+"""Pydantic data-validation models for the The Firm (multi-agent dev team)."""
 
 from __future__ import annotations
 

@@ -15,7 +15,7 @@ The UI has two tabs sharing the same node-editor surface:
 | Tab | What it does |
 |---|---|
 | **Court** | The case flow above: intake → counsels → judge |
-| **Coding Hub** | A multi-agent dev team: a **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
+| **The Firm** | Your AI law firm for software: a multi-agent dev team. a **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
 
 Hub flow: `brief → planner → [agent₁ ∥ agent₂ ∥ … (+ helpers)] → integrator → workspace`
 
@@ -29,8 +29,8 @@ services/court-orchestrator/         The backend service :8000 — middleware ch
   app/core/{benchmarks,agents,graph}.py   Model evaluation: benchmark runner, persona agents, Neo4j graph
   app/data/benchmarks/               Bundled benchmark sample subsets (MMLU, GSM8K, ARC, TruthfulQA, HellaSwag)
   app/data/personas/                 The five built-in persona agents
-workspaces/<run_id>/                 Coding Hub exports (git-ignored); .hub/run.json carries the full trace
-frontend/                            Vite + React + React Flow UI :5173 (court canvas, coding hub, evaluation pages)
+workspaces/<run_id>/                 The Firm exports (git-ignored); .hub/run.json carries the full trace
+frontend/                            Vite + React + React Flow UI :5173 (court canvas, The Firm, evaluation pages)
 scripts/dev.sh                       Starts the backend service (creates .venv on first run)
 scripts/fetch_benchmarks.py          Pulls real benchmark rows from Hugging Face to replace the samples
 docker-compose.neo4j.yml             Optional local Neo4j for the interaction graph
@@ -117,7 +117,7 @@ One dedicated service (one terminal, one process) assembled by the `create_app()
 
 **Layered routing** (request flow): Pydantic validation models (`app/models/`) → handlers holding the business logic (`app/handlers/`) → routers channeling requests (`app/routers/`) → registered on the app in `main.py` → frontend. Non-HTTP infrastructure (Canopy Wave client, config) lives in `app/core/`.
 
-**Coding Hub endpoints** (`app/handlers/hub.py`, `app/routers/hub.py`):
+**The Firm endpoints** (`app/handlers/hub.py`, `app/routers/hub.py`):
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -139,14 +139,14 @@ Credentials live in a `.env` (searched in `services/court-orchestrator/`, `servi
 ```
 CANOPYWAVE_API_KEY=...
 CANOPYWAVE_BASE_URL=https://inference.canopywave.io/v1
-# optional Coding Hub role overrides
+# optional The Firm role overrides
 HUB_PLANNER_MODEL=minimax/minimax-m3
 HUB_ENGINEER_MODEL=moonshotai/kimi-k2.6
 HUB_INTEGRATOR_MODEL=minimax/minimax-m3
 HUB_WORKSPACES_DIR=/somewhere/else   # defaults to <repo>/workspaces
 ```
 
-Publishing from the Coding Hub needs the `gh` CLI logged in (`gh auth login`); the backend runs `git init` + `gh repo create --push` on the exported workspace.
+Publishing from the The Firm needs the `gh` CLI logged in (`gh auth login`); the backend runs `git init` + `gh repo create --push` on the exported workspace.
 
 ### Backend (one terminal)
 

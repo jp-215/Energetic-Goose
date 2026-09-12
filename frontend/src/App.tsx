@@ -61,7 +61,7 @@ function CourtPage() {
   )
 }
 
-/** Coding Hub: same node-editor surface as the court, plus the lifecycle /
+/** The Firm: same node-editor surface as the court, plus the lifecycle /
  * workspace transparency panel. */
 function HubPage() {
   return (
@@ -87,7 +87,7 @@ export default function App() {
         </h1>
         <nav className="main-nav">
           <NavLink to="/" end>Court</NavLink>
-          <NavLink to="/hub">Coding Hub</NavLink>
+          <NavLink to="/hub">The Firm</NavLink>
           <NavLink to="/evaluate">Evaluate {running && <span className="nav-dot" title={`${runs.length} session(s) running`} />}</NavLink>
           <NavLink to="/sessions">Sessions</NavLink>
           <NavLink to="/rankings">Rankings</NavLink>

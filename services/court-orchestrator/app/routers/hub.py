@@ -1,4 +1,4 @@
-"""Coding Hub router: planner / team run / export / publish endpoints."""
+"""The Firm router: planner / team run / export / publish endpoints."""
 
 from __future__ import annotations
 

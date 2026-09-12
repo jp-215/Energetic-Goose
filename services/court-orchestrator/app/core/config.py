@@ -51,7 +51,7 @@ INFERENCE_CONFIG = {
 
 VALID_VERDICTS = {"PLAINTIFF", "DEFENDANT", "MIXED", "UNKNOWN"}
 
-# ---- Coding Hub: multi-agent development team -------------------------------
+# ---- The Firm: multi-agent development team -------------------------------
 # The hub is a separate tab from the court. A planner model analyzes the brief,
 # decides the team, and assigns tasks; engineer agents build; any agent may
 # summon a helper; an integrator assembles the runnable workspace.
