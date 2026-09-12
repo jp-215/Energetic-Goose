@@ -108,7 +108,7 @@ async def publish_workspace(run_id: str, repo_name: str, private: bool = True,
     status = await _run([git, "status", "--porcelain"], target)
     if status:
         await _run(
-            [git, "-c", "user.name=AI Court — The Firm", "-c", "user.email=hub@ai-court.local",
+            [git, "-c", "user.name=Veritas — The Firm", "-c", "user.email=firm@veritas.local",
              "commit", "-q", "-m", f"The Firm run {run_id}"],
             target,
         )

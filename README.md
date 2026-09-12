@@ -1,6 +1,6 @@
-# AI Court System
+# Veritas
 
-An AI court that deliberates cases using models hosted on **Canopy Wave** (OpenAI-compatible inference API). Three model roles:
+Veritas is an AI court that deliberates cases using models hosted on **Canopy Wave** (OpenAI-compatible inference API). Three model roles:
 
 | Role | Job | Default model |
 |---|---|---|

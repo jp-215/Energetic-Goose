@@ -1,4 +1,4 @@
-"""AI Court service (public, :8000).
+"""Veritas service (public, :8000).
 
 The single backend service: it owns the role logic and all Canopy Wave
 model calls, and serves the frontend directly. One dedicated terminal
@@ -49,7 +49,7 @@ def _banner_extra() -> dict:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="AI Court Orchestrator", version="0.3.0")
+    app = FastAPI(title="Veritas Orchestrator", version="0.3.0")
     install_all(
         app,
         service_name=SERVICE_NAME,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts the AI Court service (one terminal, one process) on :8000.
+# Starts the Veritas service (one terminal, one process) on :8000.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

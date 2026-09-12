@@ -83,7 +83,7 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <h1>
-          <span className="gavel">&#9878;&#65039;</span> AI Court System
+          <span className="gavel">&#9878;&#65039;</span> Veritas
         </h1>
         <nav className="main-nav">
           <NavLink to="/" end>Court</NavLink>

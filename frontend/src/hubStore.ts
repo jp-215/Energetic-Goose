@@ -292,7 +292,7 @@ export const useHubStore = create<HubState>((set, get) => ({
     }
     set({ publishStatus: 'working', publishError: null })
     try {
-      const info = await publishWorkspace(runId, repoName.trim(), repoPrivate, `${title} — built by the AI Court — The Firm`)
+      const info = await publishWorkspace(runId, repoName.trim(), repoPrivate, `${title} — built by Veritas — The Firm`)
       set({ publishStatus: 'done', repoUrl: info.repo_url })
     } catch (err) {
       set({ publishStatus: 'error', publishError: err instanceof Error ? err.message : String(err) })
