@@ -17,9 +17,16 @@ if __package__ in (None, ""):  # executed as `python main.py` — bootstrap pack
 
 from fastapi import FastAPI
 
-from .core.config import CORS_ORIGINS, get_api_key, get_base_url, get_role_models, mask_secret
+from .core.config import (
+    CORS_ORIGINS,
+    get_api_key,
+    get_base_url,
+    get_hub_models,
+    get_role_models,
+    mask_secret,
+)
 from .middleware import install_all
-from .routers import court, meta
+from .routers import court, hub, meta
 
 SERVICE_NAME = "court-orchestrator"
 
@@ -31,11 +38,12 @@ def _banner_extra() -> dict:
         "api key": mask_secret(get_api_key()),
         "cors origins": ", ".join(CORS_ORIGINS),
         **{f"role/{role}": model for role, model in role_models.items()},
+        **{f"hub/{role}": model for role, model in get_hub_models().items()},
     }
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="AI Court Orchestrator", version="0.2.0")
+    app = FastAPI(title="AI Court Orchestrator", version="0.3.0")
     install_all(
         app,
         service_name=SERVICE_NAME,
@@ -44,6 +52,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(meta.router)
     app.include_router(court.router)
+    app.include_router(hub.router)
     return app
 
 

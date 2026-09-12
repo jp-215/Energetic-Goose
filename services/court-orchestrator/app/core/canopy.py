@@ -162,3 +162,95 @@ async def call_role_model(
         status="error",
         error=last_error or "Unknown error",
     )
+
+
+# ---- Generic chat call (Coding Hub) -----------------------------------------
+
+
+@dataclass
+class ChatCallResult:
+    """Raw completion for callers that do their own parsing (planner, engineers,
+    integrator). Carries the full prompt so every call is auditable in the UI."""
+
+    role: str
+    model: str
+    system_prompt: str
+    user_prompt: str
+    text: str
+    latency_ms: int
+    retries_used: int
+    status: str
+    error: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    finish_reason: Optional[str] = None
+
+
+async def call_chat(
+    role: str,
+    system_prompt: str,
+    user_prompt: str,
+    model_name: str,
+    max_tokens: int,
+    timeout_seconds: Optional[float] = None,
+    temperature: Optional[float] = None,
+) -> ChatCallResult:
+    """One chat completion with the court's retry/backoff policy, no parsing."""
+    client = get_client()
+    retries_used = 0
+    last_error: Optional[str] = None
+    timeout = timeout_seconds or INFERENCE_CONFIG["timeout_seconds"]
+    temp = INFERENCE_CONFIG["temperature"] if temperature is None else temperature
+
+    for attempt in range(INFERENCE_CONFIG["max_retries"] + 1):
+        started = time.perf_counter()
+        try:
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=temp,
+                max_tokens=max_tokens,
+                timeout=timeout,
+            )
+            text = response.choices[0].message.content if response.choices else ""
+            finish_reason = response.choices[0].finish_reason if response.choices else None
+            usage = getattr(response, "usage", None)
+            return ChatCallResult(
+                role=role,
+                model=model_name,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                text=text or "",
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                retries_used=retries_used,
+                status="ok",
+                prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
+                completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+                finish_reason=finish_reason,
+            )
+        except Exception as exc:
+            last_error = str(exc)
+            if attempt < INFERENCE_CONFIG["max_retries"]:
+                retries_used += 1
+                await asyncio.sleep(INFERENCE_CONFIG["backoff_base_seconds"] ** retries_used)
+            else:
+                return ChatCallResult(
+                    role=role,
+                    model=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    text="",
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                    retries_used=retries_used,
+                    status="error",
+                    error=last_error,
+                )
+
+    return ChatCallResult(
+        role=role, model=model_name, system_prompt=system_prompt, user_prompt=user_prompt,
+        text="", latency_ms=0, retries_used=retries_used, status="error",
+        error=last_error or "Unknown error",
+    )

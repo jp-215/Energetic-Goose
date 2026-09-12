@@ -51,6 +51,60 @@ INFERENCE_CONFIG = {
 
 VALID_VERDICTS = {"PLAINTIFF", "DEFENDANT", "MIXED", "UNKNOWN"}
 
+# ---- Coding Hub: multi-agent development team -------------------------------
+# The hub is a separate tab from the court. A planner model analyzes the brief,
+# decides the team, and assigns tasks; engineer agents build; any agent may
+# summon a helper; an integrator assembles the runnable workspace.
+DEFAULT_HUB_MODELS = {
+    "planner": "minimax/minimax-m3",
+    "engineer": "moonshotai/kimi-k2.6",
+    "integrator": "minimax/minimax-m3",
+}
+
+HUB_MODEL_ENV_KEYS = {
+    "planner": "HUB_PLANNER_MODEL",
+    "engineer": "HUB_ENGINEER_MODEL",
+    "integrator": "HUB_INTEGRATOR_MODEL",
+}
+
+HUB_ROLE_INSTRUCTIONS = {
+    "planner": (
+        "You are the Planner of an AI software development team. You receive a project "
+        "brief and must analyze it, break it into concrete engineering tasks, decide how "
+        "many agents the team needs, and assign every task to exactly one agent. Prefer "
+        "the smallest team that can finish the work; never exceed the stated maximum."
+    ),
+    "engineer": (
+        "You are an Engineer agent on an AI software development team. You own the tasks "
+        "assigned to you and must produce complete, runnable source files. If part of "
+        "your task needs a specialist you do not have time for, you may summon exactly "
+        "one helper agent by describing the sub-task precisely."
+    ),
+    "integrator": (
+        "You are the Integrator of an AI software development team. You receive every "
+        "file the agents produced and must make the project runnable end to end: add or "
+        "fix the README, entrypoint, dependency manifest, and any glue code that is "
+        "missing. Do not rewrite files that already work."
+    ),
+}
+
+# Hard caps that keep an agent team from growing without bound.
+HUB_LIMITS = {
+    "max_team_size": 5,   # planner may assign at most this many engineers
+    "max_helpers": 3,     # total helpers that may be summoned in one run
+    "max_depth": 1,       # helpers cannot summon helpers of their own
+    "max_files_per_agent": 12,
+}
+
+HUB_INFERENCE_CONFIG = {
+    "planner_max_tokens": 2500,
+    "agent_max_tokens": 6000,
+    "integrator_max_tokens": 8000,
+    "timeout_seconds": 120,
+}
+
+WORKSPACES_DIRNAME = "workspaces"
+
 CORS_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -83,4 +137,11 @@ def get_role_models() -> Dict[str, str]:
     return {
         role: os.environ.get(env_key, "").strip() or DEFAULT_ROLE_MODELS[role]
         for role, env_key in ROLE_MODEL_ENV_KEYS.items()
+    }
+
+
+def get_hub_models() -> Dict[str, str]:
+    return {
+        role: os.environ.get(env_key, "").strip() or DEFAULT_HUB_MODELS[role]
+        for role, env_key in HUB_MODEL_ENV_KEYS.items()
     }

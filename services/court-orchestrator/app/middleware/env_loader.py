@@ -19,6 +19,7 @@ REPO_ROOT = SERVICE_DIR.parent.parent
 
 ENV_CANDIDATES = [
     SERVICE_DIR / ".env",
+    SERVICE_DIR.parent / ".env",  # services/.env — shared across services
     REPO_ROOT / ".env",
     REPO_ROOT / "Demo" / ".env",
 ]
