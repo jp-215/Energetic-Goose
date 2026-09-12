@@ -1,0 +1,21 @@
+{
+  "name": "mmlu",
+  "display_name": "MMLU",
+  "source": "cais/mmlu (Hugging Face) — sample subset",
+  "task_type": "multiple_choice",
+  "description": "Massive Multitask Language Understanding: 4-way multiple choice across 57 academic subjects.",
+  "items": [
+    {"id": "mmlu-001", "subject": "high_school_biology", "question": "Which organelle is the primary site of ATP synthesis in eukaryotic cells?", "choices": ["Ribosome", "Mitochondrion", "Golgi apparatus", "Lysosome"], "answer": "B"},
+    {"id": "mmlu-002", "subject": "college_mathematics", "question": "What is the derivative of x^3 with respect to x?", "choices": ["3x^2", "x^2", "3x", "x^3 / 3"], "answer": "A"},
+    {"id": "mmlu-003", "subject": "high_school_european_history", "question": "The Peace of Westphalia (1648) brought an end to which conflict?", "choices": ["The Hundred Years' War", "The Thirty Years' War", "The War of the Spanish Succession", "The Napoleonic Wars"], "answer": "B"},
+    {"id": "mmlu-004", "subject": "college_computer_science", "question": "What is the average-case time complexity of quicksort on n elements?", "choices": ["O(n)", "O(n log n)", "O(n^2)", "O(log n)"], "answer": "B"},
+    {"id": "mmlu-005", "subject": "high_school_chemistry", "question": "Assuming complete dissociation, what is the pH of a 0.01 M HCl solution?", "choices": ["1", "2", "12", "0.01"], "answer": "B"},
+    {"id": "mmlu-006", "subject": "high_school_microeconomics", "question": "Ceteris paribus, an increase in the supply of a good leads to which change in the market equilibrium?", "choices": ["Higher price and lower quantity", "Lower price and higher quantity", "Higher price and higher quantity", "Lower price and lower quantity"], "answer": "B"},
+    {"id": "mmlu-007", "subject": "high_school_physics", "question": "The acceleration of an object in uniform circular motion is directed:", "choices": ["Tangent to the path", "Toward the center of the circle", "Away from the center of the circle", "Nowhere; the acceleration is zero"], "answer": "B"},
+    {"id": "mmlu-008", "subject": "high_school_geography", "question": "Which river is the longest in Asia?", "choices": ["Ganges", "Mekong", "Yangtze", "Indus"], "answer": "C"},
+    {"id": "mmlu-009", "subject": "professional_law", "question": "In criminal law, the term \"mens rea\" refers to:", "choices": ["The criminal act itself", "The guilty mind or criminal intent", "The prosecution's burden of proof", "Protection against double jeopardy"], "answer": "B"},
+    {"id": "mmlu-010", "subject": "high_school_statistics", "question": "For a normal distribution, approximately what percentage of values lie within two standard deviations of the mean?", "choices": ["68%", "90%", "95%", "99.7%"], "answer": "C"},
+    {"id": "mmlu-011", "subject": "philosophy", "question": "The categorical imperative is most closely associated with which philosopher?", "choices": ["David Hume", "Immanuel Kant", "John Stuart Mill", "Friedrich Nietzsche"], "answer": "B"},
+    {"id": "mmlu-012", "subject": "astronomy", "question": "Which planet in the Solar System has the greatest number of confirmed moons?", "choices": ["Jupiter", "Saturn", "Uranus", "Neptune"], "answer": "B"}
+  ]
+}

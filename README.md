@@ -17,9 +17,62 @@ Flow: `case (context + query) → [simple ∥ complex] → judge → final verdi
 ```
 notebooks/ai_court_prototype.ipynb   Research prototype (env setup → model calls → orchestration → demo docket)
 services/court-orchestrator/         The backend service :8000 — middleware chain, court logic, Canopy Wave calls
-frontend/                            Vite + React + React Flow node-editor UI :5173
+  app/core/{benchmarks,agents,graph}.py   Model evaluation: benchmark runner, persona agents, Neo4j graph
+  app/data/benchmarks/               Bundled benchmark sample subsets (MMLU, GSM8K, ARC, TruthfulQA, HellaSwag)
+  app/data/personas/                 The five built-in persona agents
+frontend/                            Vite + React + React Flow UI :5173 (court canvas + evaluation pages)
 scripts/dev.sh                       Starts the backend service (creates .venv on first run)
+scripts/fetch_benchmarks.py          Pulls real benchmark rows from Hugging Face to replace the samples
+docker-compose.neo4j.yml             Optional local Neo4j for the interaction graph
+Demo/personas/extra_personas.json    Extra personalities to try the import feature
 ```
+
+## Model evaluation (`/evaluate`)
+
+A second product on the same service: evaluate cutting-edge models (Chinese and US) with a
+score that is half open-source benchmarks and half feedback from simulated users.
+
+```
+model id(s)  ─►  ① benchmark session   (MMLU, GSM8K, ARC-Challenge, TruthfulQA, HellaSwag)  ─► benchmark score
+             └►  ② agent session       (5 persona agents talk to the model, then grade it)   ─► agent score
+
+final = 0.5 × benchmark score + 0.5 × agent score        (weights adjustable per run)
+```
+
+**Persona agents.** Each agent is a personality (background, traits, communication style, patience,
+strictness, a scenario to accomplish, and priority weights over *helpfulness / accuracy / clarity /
+tone / trust*). A simulator model plays the persona for a multi-turn conversation with the model
+under test, then fills in a feedback form: 1–10 ratings per dimension, a summary, highlights,
+complaints and a quotable line. The agent's score is the priority-weighted mean of its ratings.
+Five personas ship by default (a startup founder, a physics professor, a bilingual Shanghai PM, a
+staff engineer, and a 72-year-old retiree). Import your own on the **Agents** page (paste JSON or
+upload a file — see `Demo/personas/extra_personas.json`), or via `POST /api/eval/personas/import`.
+
+**Benchmarks.** Bundled sample subsets keep the app runnable offline; replace them with real rows
+from Hugging Face (`.venv/bin/python scripts/fetch_benchmarks.py --rows 100`). Multiple-choice
+benchmarks are graded by letter, GSM8K by final number. Items per benchmark is a per-run knob.
+
+**Neo4j graph.** Every session is mirrored into a graph of how the agents used the model:
+
+```
+(Session)-[:EVALUATES]->(Model)          (Session)-[:RAN_BENCHMARK {score}]->(Benchmark)
+(Agent)-[:PARTICIPATED_IN]->(Session)    (Agent)-[:INTERACTED_WITH {score,turns}]->(Model)
+(Agent)-[:SENT]->(Turn)-[:NEXT]->(Turn)<-[:REPLIED]-(Model)
+(Agent)-[:GAVE]->(Feedback)-[:ABOUT]->(Model)
+```
+
+Set `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` to write to a real Neo4j
+(`docker compose -f docker-compose.neo4j.yml up -d`); otherwise an in-memory graph with the same
+schema is used. The session page renders the graph (model at the centre, one spoke per agent, turns
+along the spoke, feedback beyond) and shows the Cypher; with Neo4j the query box is live.
+
+**Pages.** `/evaluate` (pick models from the dropdown or type any id, choose agents, benchmarks,
+weights; live progress), `/sessions` (manage, re-run, delete), `/sessions/<id>` (final score, the two
+session scores, agent transcripts + feedback, benchmark items, graph), `/rankings` (our own
+leaderboard, with CN vs US averages), `/agents` (persona management + import).
+
+**Demo without credits.** `CANOPYWAVE_API_KEY=mock` (or `EVAL_MOCK=1`) fakes every model call
+deterministically, so the whole pipeline and UI can be exercised end to end.
 
 ## Backend architecture
 
@@ -90,6 +143,15 @@ Run the identical suite locally:
 - `GET /api/health` — service health
 - `GET /api/models` — model ids available on Canopy Wave
 - `GET /api/roles` — role → model map, role instructions, inference config
+- `POST /api/court/run` — run a case (see below)
+- `GET /api/eval/meta` — model catalog (CN/US), platform models, benchmarks, weights, graph backend
+- `POST /api/eval/run` · `POST /api/eval/run/stream` — evaluate one or more models (NDJSON stream of
+  `session_created`, `benchmark_item`, `benchmark_result`, `agent_turn`, `agent_feedback`, `session_done`)
+- `GET|DELETE /api/eval/sessions[/{id}]` · `POST /api/eval/sessions/{id}/rerun/stream`
+- `GET /api/eval/sessions/{id}/graph` — nodes + relationships for the session (Neo4j or in-memory)
+- `GET /api/eval/rankings` — leaderboard across completed sessions
+- `GET /api/eval/graph/status` · `POST /api/eval/graph/cypher` (read-only, Neo4j only)
+- `GET /api/eval/personas` · `POST /api/eval/personas/import` · `PUT|DELETE /api/eval/personas/{id}` · `POST /api/eval/personas/reset`
 - `POST /api/court/run` — run a case:
 
 ```bash

@@ -3,3 +3,4 @@ uvicorn[standard]>=0.30
 openai>=1.50
 python-dotenv>=1.0
 pydantic>=2.8
+neo4j>=5.20

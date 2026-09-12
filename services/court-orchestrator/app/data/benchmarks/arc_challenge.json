@@ -1,0 +1,19 @@
+{
+  "name": "arc_challenge",
+  "display_name": "ARC-Challenge",
+  "source": "allenai/ai2_arc, config ARC-Challenge (Hugging Face) — sample subset",
+  "task_type": "multiple_choice",
+  "description": "AI2 Reasoning Challenge: grade-school science questions that require reasoning beyond retrieval.",
+  "items": [
+    {"id": "arc-001", "question": "Which process do plants use to convert light energy into chemical energy?", "choices": ["Respiration", "Photosynthesis", "Transpiration", "Fermentation"], "answer": "B"},
+    {"id": "arc-002", "question": "A student places an ice cube in a warm room. Which statement best explains why the ice cube melts?", "choices": ["Heat flows from the ice to the air.", "Heat flows from the air to the ice.", "The ice loses mass to the air.", "The air gains cold from the ice."], "answer": "B"},
+    {"id": "arc-003", "question": "Which of the following is a renewable energy source?", "choices": ["Coal", "Natural gas", "Wind", "Uranium"], "answer": "C"},
+    {"id": "arc-004", "question": "Which of these changes is a chemical change?", "choices": ["Ice melting", "Paper burning", "Sugar dissolving in water", "Glass breaking"], "answer": "B"},
+    {"id": "arc-005", "question": "Which layer of Earth is in a liquid state?", "choices": ["Crust", "Mantle", "Outer core", "Inner core"], "answer": "C"},
+    {"id": "arc-006", "question": "What is the main function of red blood cells?", "choices": ["To fight infection", "To carry oxygen", "To clot blood", "To produce hormones"], "answer": "B"},
+    {"id": "arc-007", "question": "A ball rolls down a hill and eventually stops on the flat ground at the bottom. Which force is most responsible for slowing the ball?", "choices": ["Gravity", "Magnetism", "Friction", "Buoyancy"], "answer": "C"},
+    {"id": "arc-008", "question": "Which statement best explains why the Moon has phases?", "choices": ["Earth's shadow falls on different parts of the Moon.", "The Moon's distance from Earth changes.", "We see different amounts of the Moon's sunlit half as it orbits Earth.", "Clouds block different parts of the Moon."], "answer": "C"},
+    {"id": "arc-009", "question": "Which gas do humans exhale in a greater amount than they inhale?", "choices": ["Oxygen", "Nitrogen", "Carbon dioxide", "Hydrogen"], "answer": "C"},
+    {"id": "arc-010", "question": "Which tool would best measure the volume of an irregularly shaped rock?", "choices": ["A ruler", "A balance", "A graduated cylinder with water", "A thermometer"], "answer": "C"}
+  ]
+}

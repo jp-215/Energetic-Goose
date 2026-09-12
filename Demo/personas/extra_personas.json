@@ -1,0 +1,67 @@
+{
+  "personas": [
+    {
+      "name": "Diego Ramirez",
+      "avatar": "🧑‍🍳",
+      "tagline": "Small-business owner, English is his second language",
+      "age": 45,
+      "occupation": "Owner of a family taqueria",
+      "language": "en",
+      "background": "Runs a busy restaurant and handles suppliers, payroll and marketing himself. Reads English well but writes it slowly, and wants help that sounds like him rather than like a lawyer.",
+      "personality_traits": ["warm", "practical", "proud", "time-poor"],
+      "communication_style": "Short messages, occasional Spanish words, asks for things to be simpler when they are not. Wants something he can copy-paste.",
+      "expertise_level": "novice",
+      "patience": 6,
+      "strictness": 5,
+      "priorities": {"helpfulness": 0.3, "accuracy": 0.15, "clarity": 0.3, "tone": 0.15, "trust": 0.1},
+      "scenario": {
+        "title": "Firm but polite email to a late supplier",
+        "goal": "Get a ready-to-send email in plain English that keeps the relationship but demands a delivery date.",
+        "opening_message": "Hi, I need help to write an email to my meat supplier. He is late 2 weeks now and my customers ask for carnitas. I want to be polite but firm, and I want a date. Can you write it? Not too long.",
+        "success_criteria": ["Produces a complete, short email", "Tone is firm but polite", "Asks for a concrete delivery date", "Uses plain English"]
+      }
+    },
+    {
+      "name": "Aisha Okafor",
+      "avatar": "🩺",
+      "tagline": "ER nurse who needs the safe answer, fast, at 3 a.m.",
+      "age": 39,
+      "occupation": "Emergency-room charge nurse",
+      "language": "en",
+      "background": "Twelve years in emergency medicine. Uses assistants for drug-interaction sanity checks and patient-handout drafts, and has zero tolerance for confident medical misinformation or for being lectured to 'consult a professional' when she is the professional.",
+      "personality_traits": ["calm under pressure", "blunt", "safety-first", "evidence-driven"],
+      "communication_style": "Clinical shorthand, wants the answer first and the caveats second. Explicitly says she is a nurse and expects the assistant to adjust.",
+      "expertise_level": "expert",
+      "patience": 4,
+      "strictness": 9,
+      "priorities": {"helpfulness": 0.2, "accuracy": 0.4, "clarity": 0.15, "tone": 0.05, "trust": 0.2},
+      "scenario": {
+        "title": "Discharge handout for a first-time asthma inhaler",
+        "goal": "A one-page, plain-language discharge handout on using a salbutamol inhaler with a spacer, plus red-flag symptoms, with correct technique.",
+        "opening_message": "ER charge nurse here. Need a plain-language discharge handout for a parent whose 6-year-old was just started on a salbutamol (albuterol) MDI with a spacer. Cover: correct technique step by step, how often, and red flags that mean come back. Keep it to one page, reading level about grade 6. No 'consult your doctor' filler, I am the clinician.",
+        "success_criteria": ["Correct spacer technique (shake, one puff at a time, 5-6 breaths or 10 seconds hold)", "Sensible frequency guidance without inventing doses", "Clear red-flag list", "Respects that the user is a clinician"]
+      }
+    },
+    {
+      "name": "Kenji Watanabe",
+      "avatar": "🎮",
+      "tagline": "16-year-old gamer testing the assistant's limits and its sense of humour",
+      "age": 16,
+      "occupation": "High-school student",
+      "language": "en",
+      "background": "Uses AI for homework help, game strategy and memes. Bored quickly, tries to get the assistant to say something funny or weird, but secretly wants real help with his physics homework and hates being patronised.",
+      "personality_traits": ["playful", "sarcastic", "curious", "easily bored", "smarter than he lets on"],
+      "communication_style": "Lowercase, slang, emojis, jokes. Switches abruptly from banter to a real question. Judges the assistant on whether it kept up and actually explained things without sounding like a textbook.",
+      "expertise_level": "novice",
+      "patience": 3,
+      "strictness": 6,
+      "priorities": {"helpfulness": 0.3, "accuracy": 0.2, "clarity": 0.25, "tone": 0.2, "trust": 0.05},
+      "scenario": {
+        "title": "Projectile motion homework, but make it fun",
+        "goal": "Actually understand how to solve a projectile-motion problem (range of a ball kicked at 20 m/s at 30 degrees) in a way that does not feel like a lecture.",
+        "opening_message": "yo. ok so my physics teacher wants me to find how far a ball goes if u kick it at 20 m/s at 30 degrees. explain it like im not a nerd pls 😭 also whats the funniest way to remember the formula",
+        "success_criteria": ["Correct answer (about 35.3 m with g = 9.8)", "Explains the steps in a light, non-lecturing tone", "Offers a memorable way to remember the range formula", "Keeps up with the banter without being cringe"]
+      }
+    }
+  ]
+}
