@@ -15,7 +15,7 @@ The UI has two tabs sharing the same node-editor surface:
 | Tab | What it does |
 |---|---|
 | **Court** | The case flow above: intake → counsels → judge |
-| **The Firm** | Your AI law firm for software: a multi-agent dev team. a **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
+| **The Firm** | Your AI law firm for software: a multi-agent dev team. A **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
 
 Hub flow: `brief → planner → [agent₁ ∥ agent₂ ∥ … (+ helpers)] → integrator → workspace`
 
