@@ -12,13 +12,16 @@ services/*/.env
 Demo/.env
 
 # Node
-frontend/node_modules/
+node_modules/
 frontend/dist/
+
+# Local data written by the evaluation service (sessions, personas, fallback graph)
+services/court-orchestrator/var/
+
+# Coding Hub exports
+workspaces/
 
 # OS / editor
 .DS_Store
 .vscode/
 .idea/
-
-# Coding Hub exports
-workspaces/

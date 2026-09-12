@@ -1,0 +1,19 @@
+{
+  "name": "gsm8k",
+  "display_name": "GSM8K",
+  "source": "openai/gsm8k (Hugging Face) — sample subset",
+  "task_type": "numeric",
+  "description": "Grade-school math word problems requiring multi-step arithmetic reasoning; graded by final numeric answer.",
+  "items": [
+    {"id": "gsm8k-001", "question": "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?", "answer": "72"},
+    {"id": "gsm8k-002", "question": "A bakery bakes 12 dozen muffins each morning. By noon it has sold 3/4 of them. How many muffins are left at noon?", "answer": "36"},
+    {"id": "gsm8k-003", "question": "Tom earns $15 per hour. He worked 8 hours on Monday, 6 hours on Tuesday, and 10 hours on Wednesday. How many dollars did he earn in total?", "answer": "360"},
+    {"id": "gsm8k-004", "question": "A rectangular garden is 12 meters long and 8 meters wide. A path 1 meter wide runs all the way around the outside of the garden. What is the area of the path in square meters?", "answer": "44"},
+    {"id": "gsm8k-005", "question": "A train travels 180 km in 2.5 hours. At the same average speed, how many kilometers will it travel in 4 hours?", "answer": "288"},
+    {"id": "gsm8k-006", "question": "Sarah has 3 times as many stickers as Jake. Together they have 96 stickers. How many stickers does Sarah have?", "answer": "72"},
+    {"id": "gsm8k-007", "question": "A shirt costs $40. It is discounted by 25%, and then an 8% sales tax is applied to the discounted price. What is the final price in dollars?", "answer": "32.4"},
+    {"id": "gsm8k-008", "question": "A school has 5 classes with 28 students each. For a field trip, each bus holds 40 students. What is the minimum number of buses needed?", "answer": "4"},
+    {"id": "gsm8k-009", "question": "Maria reads 25 pages a day. Her book has 420 pages. After 12 days of reading, how many pages does she have left?", "answer": "120"},
+    {"id": "gsm8k-010", "question": "A recipe needs 3 eggs to make 12 cookies. How many eggs are needed to make 60 cookies?", "answer": "15"}
+  ]
+}

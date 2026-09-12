@@ -22,11 +22,14 @@ from .core.config import (
     get_api_key,
     get_base_url,
     get_hub_models,
+    get_neo4j_settings,
     get_role_models,
+    get_simulator_model,
+    is_mock_mode,
     mask_secret,
 )
 from .middleware import install_all
-from .routers import court, hub, meta
+from .routers import court, evaluation, hub, meta, personas
 
 SERVICE_NAME = "court-orchestrator"
 
@@ -39,6 +42,9 @@ def _banner_extra() -> dict:
         "cors origins": ", ".join(CORS_ORIGINS),
         **{f"role/{role}": model for role, model in role_models.items()},
         **{f"hub/{role}": model for role, model in get_hub_models().items()},
+        "eval/simulator": get_simulator_model(),
+        "eval/mock mode": "on" if is_mock_mode() else "off",
+        "eval/graph": get_neo4j_settings()["uri"] or "in-memory (set NEO4J_URI for Neo4j)",
     }
 
 
@@ -53,6 +59,8 @@ def create_app() -> FastAPI:
     app.include_router(meta.router)
     app.include_router(court.router)
     app.include_router(hub.router)
+    app.include_router(evaluation.router)
+    app.include_router(personas.router)
     return app
 
 

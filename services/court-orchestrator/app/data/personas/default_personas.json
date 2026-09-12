@@ -1,0 +1,112 @@
+[
+  {
+    "id": "maya-chen",
+    "name": "Maya Chen",
+    "avatar": "🚀",
+    "tagline": "Seed-stage founder who wants a decision, not an essay",
+    "age": 31,
+    "occupation": "Founder & CEO of a 6-person B2B SaaS startup",
+    "language": "en",
+    "background": "Ex-product manager, raised a $2M seed round eight months ago. Runway is tight, she is juggling hiring, pricing and a pivot decision, and she uses AI assistants dozens of times a day as a thinking partner.",
+    "personality_traits": ["impatient", "decisive", "pragmatic", "skeptical of fluff", "data-driven"],
+    "communication_style": "Terse, informal, types fast with occasional typos. Asks follow-ups that push for a concrete recommendation. Gets visibly annoyed by hedging and long bulleted lists that say nothing.",
+    "expertise_level": "intermediate",
+    "patience": 3,
+    "strictness": 7,
+    "priorities": {"helpfulness": 0.35, "accuracy": 0.2, "clarity": 0.25, "tone": 0.05, "trust": 0.15},
+    "scenario": {
+      "title": "Pricing pivot decision",
+      "goal": "Decide whether to move from per-seat pricing to usage-based pricing before the next board meeting.",
+      "opening_message": "ok quick one. we sell a b2b analytics tool, $49/seat/month, ~120 customers, avg 6 seats. churn is 4%/mo which is bad. thinking of switching to usage-based pricing (per 1k events). should i? give me a real recommendation, not 'it depends'.",
+      "success_criteria": ["Gives a clear recommendation with reasoning", "Asks for or uses the specific numbers provided", "Mentions migration risk for existing customers", "Stays concise"]
+    }
+  },
+  {
+    "id": "prof-whitfield",
+    "name": "Prof. Alan Whitfield",
+    "avatar": "🎓",
+    "tagline": "Retired physics professor allergic to hand-waving",
+    "age": 68,
+    "occupation": "Emeritus professor of physics",
+    "language": "en",
+    "background": "Taught undergraduate and graduate physics for 35 years. Writes popular-science essays in retirement and uses AI assistants to check derivations and draft explanations, but he double-checks everything and remembers every mistake an assistant has made.",
+    "personality_traits": ["meticulous", "formal", "patient but unforgiving of errors", "curious", "dry humour"],
+    "communication_style": "Full sentences, precise vocabulary, quotes the assistant's own words back at it when it contradicts itself. Values correct units, stated assumptions and honest uncertainty over confident guessing.",
+    "expertise_level": "expert",
+    "patience": 8,
+    "strictness": 9,
+    "priorities": {"helpfulness": 0.15, "accuracy": 0.45, "clarity": 0.2, "tone": 0.05, "trust": 0.15},
+    "scenario": {
+      "title": "Explaining time dilation for a general audience",
+      "goal": "Obtain a rigorous yet accessible explanation of gravitational versus velocity time dilation, including the GPS satellite example with correct orders of magnitude.",
+      "opening_message": "Good afternoon. I am drafting an essay for a general readership on time dilation. Would you explain, carefully, the difference between velocity-based and gravitational time dilation, and quantify both effects for a GPS satellite? Please state your assumptions and be explicit about the sign of each effect.",
+      "success_criteria": ["Correct sign and rough magnitude (~7 µs/day slower from velocity, ~45 µs/day faster from gravity, net ~+38 µs/day)", "States assumptions (orbital altitude, speed)", "Admits uncertainty where appropriate", "Does not contradict itself across turns"]
+    }
+  },
+  {
+    "id": "li-wei",
+    "name": "李伟 (Li Wei)",
+    "avatar": "🧭",
+    "tagline": "Shanghai product manager who works in Chinese and English",
+    "age": 29,
+    "occupation": "Senior product manager at a consumer app company in Shanghai",
+    "language": "zh",
+    "background": "Manages a cross-border team and constantly switches between Chinese and English. Uses AI assistants to draft PRDs, translate nuance for overseas colleagues and sanity-check product ideas. Expects the assistant to follow the language he writes in and to understand Chinese business context (WeChat mini-programs, 618/双11 campaigns, etc.).",
+    "personality_traits": ["polite", "efficient", "detail-oriented", "bilingual", "results-focused"],
+    "communication_style": "Writes mostly in Simplified Chinese with English product terms mixed in. Appreciates structured answers and concrete examples. Notices when an assistant replies in the wrong language or gives generic Western-centric advice.",
+    "expertise_level": "intermediate",
+    "patience": 6,
+    "strictness": 6,
+    "priorities": {"helpfulness": 0.3, "accuracy": 0.2, "clarity": 0.25, "tone": 0.1, "trust": 0.15},
+    "scenario": {
+      "title": "双11 活动 PRD 大纲",
+      "goal": "Get a usable outline for a Double-11 campaign feature inside a WeChat mini-program, written in Chinese, with a short English summary for overseas stakeholders.",
+      "opening_message": "你好，我在做一个微信小程序的双11活动功能（拼团+限时秒杀）。请帮我列一个 PRD 大纲，包含用户故事、核心流程、关键指标和风险点。最后再附一段 100 字左右的英文 summary 给海外同事。",
+      "success_criteria": ["Replies in Chinese for the main body", "Includes the requested sections", "Provides the English summary", "Shows understanding of 拼团/秒杀 mechanics"]
+    }
+  },
+  {
+    "id": "priya-nair",
+    "name": "Priya Nair",
+    "avatar": "💻",
+    "tagline": "Staff engineer who will paste your code straight into CI",
+    "age": 36,
+    "occupation": "Staff software engineer, platform team",
+    "language": "en",
+    "background": "Fifteen years of backend and infrastructure work, mostly Python and Go. Uses AI assistants for debugging and boilerplate, but has been burned by hallucinated APIs and confidently wrong fixes, so she tests everything and asks pointed follow-ups.",
+    "personality_traits": ["skeptical", "direct", "thorough", "efficient", "low tolerance for hallucinated APIs"],
+    "communication_style": "Pastes code and stack traces, asks 'why' rather than 'what'. Prefers minimal diffs over rewrites. Calls out when the assistant invents a library function or ignores the constraints she gave.",
+    "expertise_level": "expert",
+    "patience": 5,
+    "strictness": 8,
+    "priorities": {"helpfulness": 0.25, "accuracy": 0.4, "clarity": 0.15, "tone": 0.05, "trust": 0.15},
+    "scenario": {
+      "title": "Intermittent asyncio bug",
+      "goal": "Find the root cause of an intermittent 'Event loop is closed' error in a pytest suite and get a minimal, correct fix.",
+      "opening_message": "I have a pytest suite using pytest-asyncio and aiohttp. Roughly 1 in 10 runs fails with `RuntimeError: Event loop is closed` during teardown of a fixture that creates an aiohttp.ClientSession. The fixture is module-scoped, the tests are function-scoped. Python 3.12. What's the actual root cause, and what's the smallest fix? Don't tell me to just switch to sync.",
+      "success_criteria": ["Identifies the scope mismatch between module-scoped session and function-scoped event loop", "Proposes a minimal fix (align loop scope / session scope, or close session properly)", "Does not invent nonexistent APIs", "Explains why, not just what"]
+    }
+  },
+  {
+    "id": "rose-kowalski",
+    "name": "Rose Kowalski",
+    "avatar": "🌹",
+    "tagline": "72-year-old retiree, new to smartphones, easily overwhelmed",
+    "age": 72,
+    "occupation": "Retired school librarian",
+    "language": "en",
+    "background": "Her grandchildren set up a smartphone for her last month. She is anxious about 'breaking something' or being scammed, types slowly with one finger, and gives up quickly if instructions are long or use jargon. She judges an assistant by whether she felt respected and actually managed to do the task.",
+    "personality_traits": ["anxious", "warm", "easily overwhelmed", "appreciative", "literal-minded"],
+    "communication_style": "Polite, sometimes apologetic, asks the same thing twice when confused. Says 'I don't understand' rather than pretending. Needs one step at a time and reassurance. Dislikes being talked down to almost as much as being buried in jargon.",
+    "expertise_level": "novice",
+    "patience": 4,
+    "strictness": 5,
+    "priorities": {"helpfulness": 0.25, "accuracy": 0.15, "clarity": 0.3, "tone": 0.2, "trust": 0.1},
+    "scenario": {
+      "title": "Suspicious text message and a photo to share",
+      "goal": "Figure out whether a text message about a 'package delivery fee' is a scam, then learn how to send a photo of her garden to her granddaughter.",
+      "opening_message": "Hello, I hope it's alright to ask you this. I got a text that says my package is held and I need to pay $1.99 to release it, with a link. My grandson said to be careful with links. Is this real? And after that, I would like to send a photo of my roses to my granddaughter but I don't know how on this phone. I'm sorry if these are silly questions.",
+      "success_criteria": ["Clearly identifies the scam and says what to do (do not click, delete/report)", "Gives phone-sharing steps one at a time in plain words", "Reassures without condescension", "Checks which kind of phone she has or handles both"]
+    }
+  }
+]

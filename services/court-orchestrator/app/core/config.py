@@ -145,3 +145,108 @@ def get_hub_models() -> Dict[str, str]:
         role: os.environ.get(env_key, "").strip() or DEFAULT_HUB_MODELS[role]
         for role, env_key in HUB_MODEL_ENV_KEYS.items()
     }
+
+
+# ---------------------------------------------------------------------------
+# Model evaluation (benchmarks + persona agents)
+# ---------------------------------------------------------------------------
+
+# Default 50/50 split between the open-source benchmark session and the
+# persona-agent feedback session. Overridable per run.
+EVAL_WEIGHTS = {"benchmark": 0.5, "agents": 0.5}
+
+# Feedback dimensions every persona rates (1-10). Each persona carries its own
+# priority weights over these dimensions.
+FEEDBACK_DIMENSIONS = ["helpfulness", "accuracy", "clarity", "tone", "trust"]
+
+EVAL_CONFIG = {
+    "items_per_benchmark": 8,  # sample size per benchmark per run (cost control)
+    "max_items_per_benchmark": 50,
+    "agent_turns": 3,  # user turns per persona conversation
+    "max_agent_turns": 6,
+    "benchmark_concurrency": 4,
+    "temperature": 0.0,
+    "agent_temperature": 0.4,
+    "max_tokens": 2000,  # benchmark answers + replies to personas (reasoning models need room)
+    "timeout_seconds": 90,
+    "max_retries": 2,
+    "backoff_base_seconds": 1.5,
+    # 429s from the platform: retry longer and harder than ordinary errors
+    "rate_limit_retries": 5,
+    "rate_limit_backoff_seconds": 4.0,
+    # personas talking to the model at the same time (keeps the key under its rate limit)
+    "agent_concurrency": 4,
+    # reasoning models (minimax-m3 etc.) think before they answer; give the
+    # feedback form and persona turns room so `content` is not cut off
+    "simulator_turn_max_tokens": 1500,
+    "feedback_max_tokens": 2500,
+}
+
+# Curated catalog of cutting-edge models for the evaluation dropdown, grouped
+# by region. Any model id served by the inference platform can also be typed
+# in directly; the catalog is only a convenience.
+MODEL_CATALOG = [
+    # Open-source models served by Canopy Wave (ids as listed by /v1/models)
+    {"id": "moonshotai/kimi-k2.6", "vendor": "Moonshot AI", "region": "CN"},
+    {"id": "moonshotai/kimi-k2.7-code", "vendor": "Moonshot AI", "region": "CN"},
+    {"id": "moonshotai/kimi-k2.7-code-highspeed", "vendor": "Moonshot AI", "region": "CN"},
+    {"id": "moonshotai/kimi-k3", "vendor": "Moonshot AI", "region": "CN"},
+    {"id": "minimax/minimax-m3", "vendor": "MiniMax", "region": "CN"},
+    {"id": "xiaomimimo/mimo-v2.5", "vendor": "Xiaomi", "region": "CN"},
+    {"id": "deepseek/deepseek-v4-flash", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "deepseek/deepseek-v4-pro", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "deepseek/deepseek-v4.1-flash", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "qwen/qwen3.8-flash-next", "vendor": "Alibaba Qwen", "region": "CN"},
+    {"id": "zai/glm-5.2", "vendor": "Zhipu AI", "region": "CN"},
+    # US frontier models (need a platform / key that serves them)
+    {"id": "openai/gpt-5", "vendor": "OpenAI", "region": "US"},
+    {"id": "openai/gpt-oss-120b", "vendor": "OpenAI", "region": "US"},
+    {"id": "anthropic/claude-sonnet-5", "vendor": "Anthropic", "region": "US"},
+    {"id": "anthropic/claude-opus-5", "vendor": "Anthropic", "region": "US"},
+    {"id": "google/gemini-3-pro", "vendor": "Google", "region": "US"},
+    {"id": "meta-llama/llama-4-maverick", "vendor": "Meta", "region": "US"},
+    {"id": "x-ai/grok-4", "vendor": "xAI", "region": "US"},
+]
+
+# Vendor prefix -> region, used to tag models that are not in the catalog.
+VENDOR_REGIONS = {
+    "moonshotai": "CN", "minimax": "CN", "xiaomimimo": "CN", "deepseek-ai": "CN",
+    "deepseek": "CN", "qwen": "CN", "alibaba": "CN", "zai-org": "CN", "zai": "CN", "thudm": "CN",
+    "baichuan": "CN", "01-ai": "CN", "internlm": "CN", "stepfun": "CN", "tencent": "CN",
+    "openai": "US", "anthropic": "US", "google": "US", "meta-llama": "US", "meta": "US",
+    "x-ai": "US", "xai": "US", "microsoft": "US", "nvidia": "US", "mistralai": "EU",
+    "cohere": "US", "ai21": "IL",
+}
+
+
+def model_region(model_id: str) -> str:
+    vendor = model_id.split("/", 1)[0].lower() if "/" in model_id else ""
+    for entry in MODEL_CATALOG:
+        if entry["id"] == model_id:
+            return entry["region"]
+    return VENDOR_REGIONS.get(vendor, "?")
+
+
+def get_simulator_model() -> str:
+    """Model that plays the persona agents (asks questions, writes feedback).
+    Defaults to the court's judge model so it is always accessible on the key."""
+    return os.environ.get("EVAL_SIMULATOR_MODEL", "").strip() or DEFAULT_ROLE_MODELS["judge"]
+
+
+def is_mock_mode() -> bool:
+    """Mock mode fakes every model call so the whole evaluation pipeline (and
+    UI) can be exercised without spending inference credits."""
+    flag = os.environ.get("EVAL_MOCK", "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return True
+    return os.environ.get("CANOPYWAVE_API_KEY", "").strip().lower() == "mock"
+
+
+def get_neo4j_settings() -> Dict[str, str]:
+    return {
+        "uri": os.environ.get("NEO4J_URI", "").strip(),
+        "user": os.environ.get("NEO4J_USER", "").strip() or "neo4j",
+        "password": os.environ.get("NEO4J_PASSWORD", "").strip(),
+        # empty = the server's default database (Aura instances are not always named "neo4j")
+        "database": os.environ.get("NEO4J_DATABASE", "").strip(),
+    }
