@@ -19,6 +19,7 @@ REPO_ROOT = SERVICE_DIR.parent.parent
 
 ENV_CANDIDATES = [
     SERVICE_DIR / ".env",
+    SERVICE_DIR.parent / ".env",  # services/.env — shared across services
     REPO_ROOT / ".env",
     REPO_ROOT / "Demo" / ".env",
 ]
@@ -30,6 +31,16 @@ KNOWN_KEYS = [
     "COURT_SIMPLE_MODEL",
     "COURT_COMPLEX_MODEL",
     "COURT_JUDGE_MODEL",
+    # Model evaluation (optional)
+    "EVAL_SIMULATOR_MODEL",
+    "EVAL_MOCK",
+    "EVAL_DATA_DIR",
+    # Neo4j graph of agent <-> model interactions (optional; falls back to an
+    # in-memory graph persisted to disk when unset)
+    "NEO4J_URI",
+    "NEO4J_USER",
+    "NEO4J_PASSWORD",
+    "NEO4J_DATABASE",
 ]
 
 

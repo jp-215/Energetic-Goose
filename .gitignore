@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets
+.env
+services/*/.env
+Demo/.env
+
+# Node
+node_modules/
+frontend/dist/
+
+# Local data written by the evaluation service (sessions, personas, fallback graph)
+services/court-orchestrator/var/
+
+# Coding Hub exports
+workspaces/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

@@ -1,0 +1,19 @@
+{
+  "name": "hellaswag",
+  "display_name": "HellaSwag",
+  "source": "Rowan/hellaswag (Hugging Face) — sample subset",
+  "task_type": "multiple_choice",
+  "description": "Commonsense natural language inference: pick the most plausible continuation of a short scene.",
+  "items": [
+    {"id": "hs-001", "question": "A man is standing in a kitchen holding a knife over a cutting board with an onion on it. He", "choices": ["throws the knife into the sink and leaves.", "begins slicing the onion into thin pieces.", "puts the onion in his pocket.", "starts painting the wall."], "answer": "B"},
+    {"id": "hs-002", "question": "A woman ties her running shoes and stretches on the porch. She", "choices": ["walks back inside and goes to bed.", "starts jogging down the street.", "begins to cook dinner.", "climbs onto the roof."], "answer": "B"},
+    {"id": "hs-003", "question": "A boy pours cereal into a bowl. He then", "choices": ["adds milk and picks up a spoon.", "throws the bowl out the window.", "plants the cereal in the garden.", "puts the bowl in the washing machine."], "answer": "A"},
+    {"id": "hs-004", "question": "The mechanic raises the car on the hydraulic lift and slides underneath it. He", "choices": ["begins to unscrew the oil drain plug.", "starts singing to the tires.", "falls asleep on the floor.", "paints the underside pink."], "answer": "A"},
+    {"id": "hs-005", "question": "A group of people on a beach finish setting up a volleyball net. Once the net is up, they", "choices": ["split into two teams and start serving the ball.", "bury the net in the sand.", "leave the beach immediately.", "start a campfire on the net."], "answer": "A"},
+    {"id": "hs-006", "question": "A girl sits down at a piano and opens the sheet music. She", "choices": ["places her fingers on the keys and begins to play.", "eats the sheet music.", "closes the piano and leaves.", "starts typing an email on the piano."], "answer": "A"},
+    {"id": "hs-007", "question": "The barista pours steamed milk into the espresso, moving the pitcher slowly to draw a pattern. Then she", "choices": ["hands the finished latte to the customer.", "pours the drink onto the floor.", "puts the cup into the freezer.", "drinks it herself and walks out."], "answer": "A"},
+    {"id": "hs-008", "question": "A man is kneeling on a roof holding a nail gun. He", "choices": ["jumps off the roof.", "positions a shingle and fires the nail gun.", "throws the nail gun into the yard.", "starts mowing the roof."], "answer": "B"},
+    {"id": "hs-009", "question": "Two kids wearing ice skates are standing on a frozen pond. They", "choices": ["push off and glide across the ice.", "start swimming.", "dig a hole with their skates.", "take off their skates and run."], "answer": "A"},
+    {"id": "hs-010", "question": "A chef cracks several eggs into a bowl and grabs a whisk. He", "choices": ["beats the eggs until they are frothy.", "throws the bowl away.", "puts the eggs back into their shells.", "uses the whisk to sweep the floor."], "answer": "A"}
+  ]
+}
