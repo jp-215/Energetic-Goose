@@ -1329,3 +1329,24 @@ a.run-button.small {
 .graph-section { display: grid; gap: 10px; }
 
 .warn-strip { width: 100%; text-align: center; font-size: 12.5px; color: var(--run); background: rgba(210,153,34,0.1); border: 1px solid rgba(210,153,34,0.4); border-radius: 8px; padding: 8px 12px; }
+
+/* Integrator: Push Repo */
+.push-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.push-row .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.push-button {
+  margin-top: 10px;
+}
+
+.push-block .repo-link {
+  display: block;
+  margin-top: 8px;
+}
