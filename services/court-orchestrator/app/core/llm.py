@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import random
 import re
 import time
 from dataclasses import dataclass, field
@@ -29,7 +30,41 @@ class ChatResult:
     retries_used: int
     status: str  # ok | error
     error: Optional[str] = None
-    usage: Dict[str, int] = field(default_factory=dict)
+    # {"prompt": n, "completion": n, "total": n, "estimated": bool}
+    usage: Dict[str, Any] = field(default_factory=dict)
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough fallback when the provider returns no usage (~4 chars/token)."""
+    return max(1, len(text or "") // 4)
+
+
+def make_usage(prompt: Optional[int], completion: Optional[int],
+               messages: List[Message], text: str) -> Dict[str, Any]:
+    if prompt is None or completion is None:
+        prompt = estimate_tokens("".join(m["content"] for m in messages))
+        completion = estimate_tokens(text)
+        return {"prompt": prompt, "completion": completion, "total": prompt + completion,
+                "estimated": True}
+    return {"prompt": int(prompt), "completion": int(completion),
+            "total": int(prompt) + int(completion), "estimated": False}
+
+
+def add_usage(total: Dict[str, Any], usage: Dict[str, Any]) -> Dict[str, Any]:
+    """Accumulate usage dicts (in place) and return the total."""
+    for key in ("prompt", "completion", "total"):
+        total[key] = int(total.get(key, 0)) + int(usage.get(key, 0) or 0)
+    total["estimated"] = bool(total.get("estimated", False) or usage.get("estimated", False))
+    return total
+
+
+def empty_usage() -> Dict[str, Any]:
+    return {"prompt": 0, "completion": 0, "total": 0, "estimated": False}
+
+
+def _is_rate_limit(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None)
+    return status == 429 or "429" in str(exc) or "rate limit" in str(exc).lower()
 
 
 def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
@@ -62,7 +97,7 @@ async def chat(
     client = get_client()
     retries_used = 0
     last_error: Optional[str] = None
-    for attempt in range(EVAL_CONFIG["max_retries"] + 1):
+    for attempt in range(EVAL_CONFIG["rate_limit_retries"] + 1):
         started = time.perf_counter()
         try:
             response = await client.chat.completions.create(
@@ -72,16 +107,21 @@ async def chat(
                 max_tokens=max_tokens or EVAL_CONFIG["max_tokens"],
                 timeout=EVAL_CONFIG["timeout_seconds"],
             )
-            text = response.choices[0].message.content if response.choices else ""
-            usage = {}
-            if getattr(response, "usage", None):
-                usage = {
-                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0) or 0,
-                    "completion_tokens": getattr(response.usage, "completion_tokens", 0) or 0,
-                }
+            message = response.choices[0].message if response.choices else None
+            text = (getattr(message, "content", None) if message else None) or ""
+            if not text.strip() and message is not None:
+                # Reasoning models can spend the whole budget thinking and return
+                # an empty `content`; surface the reasoning so a parser can try it.
+                text = getattr(message, "reasoning_content", None) or getattr(message, "reasoning", None) or ""
+            raw_usage = getattr(response, "usage", None)
+            usage = make_usage(
+                getattr(raw_usage, "prompt_tokens", None) if raw_usage else None,
+                getattr(raw_usage, "completion_tokens", None) if raw_usage else None,
+                messages, text,
+            )
             return ChatResult(
                 model=model,
-                text=(text or "").strip(),
+                text=text.strip(),
                 latency_ms=int((time.perf_counter() - started) * 1000),
                 retries_used=retries_used,
                 status="ok",
@@ -89,9 +129,18 @@ async def chat(
             )
         except Exception as exc:
             last_error = str(exc)
-            if attempt < EVAL_CONFIG["max_retries"]:
+            rate_limited = _is_rate_limit(exc)
+            max_retries = EVAL_CONFIG["rate_limit_retries"] if rate_limited else EVAL_CONFIG["max_retries"]
+            if attempt < max_retries:
                 retries_used += 1
-                await asyncio.sleep(EVAL_CONFIG["backoff_base_seconds"] ** retries_used)
+                if rate_limited:  # 429: back off hard, with jitter so parallel personas de-sync
+                    delay = min(60.0, EVAL_CONFIG["rate_limit_backoff_seconds"] * (2 ** (retries_used - 1)))
+                    delay *= 0.75 + 0.5 * random.random()
+                else:
+                    delay = EVAL_CONFIG["backoff_base_seconds"] ** retries_used
+                await asyncio.sleep(delay)
+            else:
+                break
     return ChatResult(
         model=model,
         text="",
@@ -99,6 +148,7 @@ async def chat(
         retries_used=retries_used,
         status="error",
         error=last_error or "Unknown error",
+        usage=empty_usage(),
     )
 
 
@@ -112,6 +162,12 @@ def _seed(*parts: str) -> int:
 
 
 def _mock_chat(model: str, messages: List[Message], purpose: str) -> ChatResult:
+    result = _mock_chat_inner(model, messages, purpose)
+    result.usage = make_usage(None, None, messages, result.text)
+    return result
+
+
+def _mock_chat_inner(model: str, messages: List[Message], purpose: str) -> ChatResult:
     """Deterministic fake responses keyed on (model, prompt) so mock sessions
     are reproducible yet differ between models."""
     last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")

@@ -53,16 +53,22 @@ Open **http://localhost:5173/evaluate**.
 
 ## 4. Run an evaluation
 
-1. **Evaluate** page: pick models from the dropdown (grouped 🇨🇳 Chinese / 🇺🇸 US, plus whatever
-   your key can access) or type any model id. Add several to compare them in one go.
+1. **Evaluate** page: click **check which models this key can call** — every platform model gets
+   a tiny test request and shows up as ✓ (click to add) or ✗ 403. Then pick models from the
+   dropdown (open-source platform models first, then the 🇨🇳 / 🇺🇸 catalog) or type any model id.
+   Add several to compare them in one go.
 2. Tick the persona agents and benchmarks to use, set items per benchmark, turns per agent, and
    the benchmark/agent weight (default 50/50).
-3. Press **Run evaluation**. Benchmark items and agent turns stream in live.
+3. Press **Run evaluation**. A three-step tracker shows *benchmark evaluation → simulated agents
+   testing → scoring* with percent, elapsed time, an ETA (`~` while it is still an estimate) and
+   tokens spent so far; each agent row shows its own 🤖 model / 🗣 simulator token counts live.
 4. Click **Open results** when a session finishes. You get:
    - the **final score** and the two session scores it is built from,
    - every agent's **conversation with the model** and its **feedback** (ratings radar, summary,
      highlights, complaints, would-use-again),
    - the per-item **benchmark** results,
+   - **Tokens & timing**: total / model-under-test / simulator tokens, seconds per stage, tokens
+     per benchmark, and per agent per conversation round,
    - the **Neo4j graph** of the session (model at the centre, one spoke per agent, turns along
      the spoke, feedback beyond) plus the Cypher — live and editable when Neo4j is connected.
 
@@ -94,6 +100,12 @@ curl localhost:8000/api/eval/sessions/<id>/graph
 ```
 
 ## Troubleshooting
+
+- A model shows **✗ 403** in the access check — the key's plan does not include it; ask Canopy
+  Wave to unlock it or pick another. On the demo key only `minimax/minimax-m3` and
+  `moonshotai/kimi-k2.6` answer.
+- **GSM8K items are slow** (30–60 s each) — the model is asked to reason step by step with up to
+  1200 tokens; lower *items per benchmark* or untick GSM8K for quick runs.
 
 - `env_loader: missing required environment variables ['CANOPYWAVE_API_KEY']` — create the `.env`
   (step 2). For a credit-free demo set it to `mock`.

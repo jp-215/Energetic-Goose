@@ -68,13 +68,69 @@ export interface Persona {
   builtin: boolean
 }
 
+export interface TokenUsage {
+  prompt: number
+  completion: number
+  total: number
+  estimated: boolean
+}
+
 export interface Turn {
   id: string
   index: number
+  round: number
   role: 'user' | 'assistant'
+  by: 'simulator' | 'target' | 'script'
   content: string
   latency_ms: number
+  tokens: TokenUsage
   error?: string | null
+}
+
+export interface RoundUsage {
+  round: number
+  simulator_tokens: number
+  target_tokens: number
+  total_tokens: number
+  latency_ms: number
+}
+
+export interface AgentTokens {
+  target: TokenUsage
+  simulator: TokenUsage
+  feedback: TokenUsage
+  total: TokenUsage
+}
+
+export interface StageProgress {
+  status: 'pending' | 'running' | 'done' | 'error'
+  done: number
+  total: number
+  started_at?: string | null
+  finished_at?: string | null
+  seconds?: number | null
+}
+
+export interface Progress {
+  stage: string
+  units_done: number
+  units_total: number
+  percent: number
+  elapsed_s: number
+  eta_s: number | null
+  eta_is_estimate: boolean
+  stages: Record<'benchmarks' | 'agents' | 'scoring', StageProgress>
+  tokens: TokenUsage
+  tokens_by_stage: { benchmarks: TokenUsage; agents: { target: TokenUsage; simulator: TokenUsage } }
+}
+
+export interface SessionTokens {
+  benchmarks: TokenUsage
+  agents: { target: TokenUsage; simulator: TokenUsage; total: TokenUsage }
+  model_under_test: TokenUsage
+  total: TokenUsage
+  per_benchmark: Record<string, TokenUsage>
+  per_agent: Record<string, AgentTokens>
 }
 
 export interface Feedback {
@@ -94,6 +150,8 @@ export interface AgentResult {
   scenario_title: string
   priorities: Record<string, number>
   turns: Turn[]
+  rounds: RoundUsage[]
+  tokens: AgentTokens
   feedback: Feedback | null
   score: number
   status: 'ok' | 'partial' | 'error'
@@ -109,6 +167,7 @@ export interface BenchmarkItemResult {
   predicted: string | null
   correct: boolean
   latency_ms: number
+  tokens?: TokenUsage
   error?: string | null
 }
 
@@ -122,6 +181,7 @@ export interface BenchmarkResult {
   score: number
   errors: number
   avg_latency_ms: number
+  tokens: TokenUsage
   items: BenchmarkItemResult[]
 }
 
@@ -153,6 +213,9 @@ export interface Session {
   final_score: number | null
   benchmarks: BenchmarkResult[]
   agents: AgentResult[]
+  progress: Progress | null
+  tokens: SessionTokens | null
+  timings: { benchmarks_s: number; agents_s: number; total_s: number } | null
   error: string | null
 }
 
@@ -171,6 +234,9 @@ export interface SessionSummary {
   final_score: number | null
   agent_count: number
   benchmark_count: number
+  percent?: number | null
+  eta_s?: number | null
+  total_tokens?: number | null
 }
 
 export interface RankingEntry {
@@ -234,7 +300,10 @@ export type EvalEvent =
       total: number
       correct: boolean
       item_id: string
+      tokens: TokenUsage
+      latency_ms: number
     }
+  | ({ event: 'progress'; session_id: string } & Progress)
   | { event: 'benchmark_result'; session_id: string; result: Omit<BenchmarkResult, 'items'> }
   | { event: 'agent_turn'; session_id: string; agent_id: string; agent_name: string; turn: Turn }
   | {
@@ -245,6 +314,8 @@ export type EvalEvent =
       score: number
       status: AgentResult['status']
       feedback: Feedback | null
+      tokens: AgentTokens
+      rounds: RoundUsage[]
     }
   | { event: 'session_done'; session: Session }
   | { event: 'all_done'; models: string[] }
@@ -258,4 +329,27 @@ export const REGION_FLAG: Record<string, string> = {
   EU: '🇪🇺',
   IL: '🇮🇱',
   '?': '🌐',
+}
+
+export interface ModelProbeResult {
+  model: string
+  accessible: boolean
+  latency_ms: number
+  error: string | null
+  tokens: TokenUsage
+}
+
+export function fmtTokens(n: number | null | undefined): string {
+  if (n == null) return '—'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 10_000) return `${(n / 1000).toFixed(1)}k`
+  return n.toLocaleString()
+}
+
+export function fmtDuration(s: number | null | undefined): string {
+  if (s == null) return '—'
+  if (s < 60) return `${Math.round(s)}s`
+  const m = Math.floor(s / 60)
+  const r = Math.round(s % 60)
+  return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m ${r.toString().padStart(2, '0')}s`
 }

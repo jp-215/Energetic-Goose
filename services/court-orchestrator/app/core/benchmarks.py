@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from .config import EVAL_CONFIG, is_mock_mode
-from .llm import chat
+from .llm import add_usage, chat, empty_usage
 from .store import data_dir
 
 BUNDLED_DIR = Path(__file__).resolve().parent.parent / "data" / "benchmarks"
@@ -169,6 +169,7 @@ async def run_benchmark(
             "choices": item.get("choices"),
             "response": result.text[:2000],
             "latency_ms": result.latency_ms,
+            "tokens": result.usage or empty_usage(),
             "error": result.error,
             **graded,
         }
@@ -179,6 +180,9 @@ async def run_benchmark(
     records = await asyncio.gather(*(one(item) for item in items))
     correct = sum(1 for r in records if r["correct"])
     total = len(records)
+    tokens = empty_usage()
+    for r in records:
+        add_usage(tokens, r["tokens"])
     return {
         "name": bench["name"],
         "display_name": bench.get("display_name", bench["name"]),
@@ -189,5 +193,6 @@ async def run_benchmark(
         "score": round(100.0 * correct / total, 2) if total else 0.0,
         "errors": sum(1 for r in records if r["error"]),
         "avg_latency_ms": int(sum(r["latency_ms"] for r in records) / total) if total else 0,
+        "tokens": tokens,
         "items": records,
     }

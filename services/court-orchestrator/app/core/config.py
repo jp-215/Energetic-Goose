@@ -106,25 +106,38 @@ EVAL_CONFIG = {
     "benchmark_concurrency": 4,
     "temperature": 0.0,
     "agent_temperature": 0.4,
-    "max_tokens": 1200,
-    "timeout_seconds": 60,
+    "max_tokens": 2000,  # benchmark answers + replies to personas (reasoning models need room)
+    "timeout_seconds": 90,
     "max_retries": 2,
     "backoff_base_seconds": 1.5,
+    # 429s from the platform: retry longer and harder than ordinary errors
+    "rate_limit_retries": 5,
+    "rate_limit_backoff_seconds": 4.0,
+    # personas talking to the model at the same time (keeps the key under its rate limit)
+    "agent_concurrency": 4,
+    # reasoning models (minimax-m3 etc.) think before they answer; give the
+    # feedback form and persona turns room so `content` is not cut off
+    "simulator_turn_max_tokens": 1500,
+    "feedback_max_tokens": 2500,
 }
 
 # Curated catalog of cutting-edge models for the evaluation dropdown, grouped
 # by region. Any model id served by the inference platform can also be typed
 # in directly; the catalog is only a convenience.
 MODEL_CATALOG = [
+    # Open-source models served by Canopy Wave (ids as listed by /v1/models)
     {"id": "moonshotai/kimi-k2.6", "vendor": "Moonshot AI", "region": "CN"},
+    {"id": "moonshotai/kimi-k2.7-code", "vendor": "Moonshot AI", "region": "CN"},
     {"id": "moonshotai/kimi-k2.7-code-highspeed", "vendor": "Moonshot AI", "region": "CN"},
     {"id": "moonshotai/kimi-k3", "vendor": "Moonshot AI", "region": "CN"},
     {"id": "minimax/minimax-m3", "vendor": "MiniMax", "region": "CN"},
     {"id": "xiaomimimo/mimo-v2.5", "vendor": "Xiaomi", "region": "CN"},
-    {"id": "deepseek-ai/deepseek-v3.2", "vendor": "DeepSeek", "region": "CN"},
-    {"id": "deepseek-ai/deepseek-r2", "vendor": "DeepSeek", "region": "CN"},
-    {"id": "qwen/qwen3.5-235b-a22b", "vendor": "Alibaba Qwen", "region": "CN"},
-    {"id": "zai-org/glm-5", "vendor": "Zhipu AI", "region": "CN"},
+    {"id": "deepseek/deepseek-v4-flash", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "deepseek/deepseek-v4-pro", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "deepseek/deepseek-v4.1-flash", "vendor": "DeepSeek", "region": "CN"},
+    {"id": "qwen/qwen3.8-flash-next", "vendor": "Alibaba Qwen", "region": "CN"},
+    {"id": "zai/glm-5.2", "vendor": "Zhipu AI", "region": "CN"},
+    # US frontier models (need a platform / key that serves them)
     {"id": "openai/gpt-5", "vendor": "OpenAI", "region": "US"},
     {"id": "openai/gpt-oss-120b", "vendor": "OpenAI", "region": "US"},
     {"id": "anthropic/claude-sonnet-5", "vendor": "Anthropic", "region": "US"},
@@ -137,7 +150,7 @@ MODEL_CATALOG = [
 # Vendor prefix -> region, used to tag models that are not in the catalog.
 VENDOR_REGIONS = {
     "moonshotai": "CN", "minimax": "CN", "xiaomimimo": "CN", "deepseek-ai": "CN",
-    "deepseek": "CN", "qwen": "CN", "alibaba": "CN", "zai-org": "CN", "thudm": "CN",
+    "deepseek": "CN", "qwen": "CN", "alibaba": "CN", "zai-org": "CN", "zai": "CN", "thudm": "CN",
     "baichuan": "CN", "01-ai": "CN", "internlm": "CN", "stepfun": "CN", "tencent": "CN",
     "openai": "US", "anthropic": "US", "google": "US", "meta-llama": "US", "meta": "US",
     "x-ai": "US", "xai": "US", "microsoft": "US", "nvidia": "US", "mistralai": "EU",
@@ -173,5 +186,6 @@ def get_neo4j_settings() -> Dict[str, str]:
         "uri": os.environ.get("NEO4J_URI", "").strip(),
         "user": os.environ.get("NEO4J_USER", "").strip() or "neo4j",
         "password": os.environ.get("NEO4J_PASSWORD", "").strip(),
-        "database": os.environ.get("NEO4J_DATABASE", "").strip() or "neo4j",
+        # empty = the server's default database (Aura instances are not always named "neo4j")
+        "database": os.environ.get("NEO4J_DATABASE", "").strip(),
     }

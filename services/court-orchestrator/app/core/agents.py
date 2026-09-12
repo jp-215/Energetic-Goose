@@ -13,11 +13,12 @@ model under test, then writes structured feedback about the experience.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from .config import EVAL_CONFIG, FEEDBACK_DIMENSIONS
-from .llm import ChatResult, chat, extract_json_object
+from .llm import ChatResult, add_usage, chat, empty_usage, extract_json_object
 
 TurnCallback = Callable[[Dict[str, Any]], Awaitable[None]]
 
@@ -53,14 +54,22 @@ def transcript_text(turns: List[Dict[str, Any]]) -> str:
     return "\n\n".join(lines)
 
 
-def _turn(index: int, role: str, result_or_text, latency_ms: int = 0, error=None) -> Dict[str, Any]:
-    content = result_or_text.text if isinstance(result_or_text, ChatResult) else str(result_or_text)
+def _turn(index: int, role: str, result_or_text, latency_ms: int = 0, error=None,
+          round_no: int = 0) -> Dict[str, Any]:
+    """One message. `by` says who spent the tokens: the simulator playing the
+    persona (user turns), the model under test (assistant turns), or nobody
+    (the scripted opening message)."""
+    is_result = isinstance(result_or_text, ChatResult)
+    content = result_or_text.text if is_result else str(result_or_text)
     return {
         "id": uuid.uuid4().hex[:10],
         "index": index,
+        "round": round_no,
         "role": role,
+        "by": ("target" if role == "assistant" else "simulator") if is_result else "script",
         "content": content,
         "latency_ms": latency_ms,
+        "tokens": (result_or_text.usage or empty_usage()) if is_result else empty_usage(),
         "error": error,
     }
 
@@ -82,7 +91,7 @@ async def next_user_message(simulator: str, persona: Dict[str, Any], turns: List
         simulator,
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=EVAL_CONFIG["agent_temperature"],
-        max_tokens=400,
+        max_tokens=EVAL_CONFIG["simulator_turn_max_tokens"],
         purpose="agent_turn",
     )
 
@@ -110,15 +119,40 @@ async def write_feedback(simulator: str, persona: Dict[str, Any],
         simulator,
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.2,
-        max_tokens=700,
+        max_tokens=EVAL_CONFIG["feedback_max_tokens"],
         purpose="agent_feedback",
     )
+
+
+_RATING_RE = {dim: re.compile('"' + dim + '"' + r'\s*:\s*([0-9]+(?:\.[0-9]+)?)') for dim in FEEDBACK_DIMENSIONS}
+_STR_RE = {key: re.compile('"' + key + '"' + r'\s*:\s*"((?:[^"\\]|\\.)*)"?') for key in ("summary", "quote")}
+
+
+def _salvage_feedback(text: str) -> Optional[Dict[str, Any]]:
+    """Truncated / fenced / half-written JSON: pull the ratings out by regex so a
+    model that ran out of tokens mid-form still gets graded."""
+    ratings = {}
+    for dim, pattern in _RATING_RE.items():
+        match = pattern.search(text)
+        if match:
+            ratings[dim] = float(match.group(1))
+    if len(ratings) < 3:
+        return None
+    payload: Dict[str, Any] = {"ratings": ratings, "would_use_again": '"would_use_again": true' in text}
+    for key, pattern in _STR_RE.items():
+        match = pattern.search(text)
+        if match:
+            payload[key] = match.group(1)
+    payload["summary"] = payload.get("summary") or "(feedback form was cut off; ratings salvaged)"
+    return payload
 
 
 def parse_feedback(text: str) -> Optional[Dict[str, Any]]:
     payload = extract_json_object(text or "")
     if not payload or not isinstance(payload.get("ratings"), dict):
-        return None
+        payload = _salvage_feedback(text or "")
+        if payload is None:
+            return None
     ratings: Dict[str, int] = {}
     for dim in FEEDBACK_DIMENSIONS:
         try:
@@ -170,13 +204,14 @@ async def run_agent(
     for t in range(1, user_turns + 1):
         # -- persona speaks -------------------------------------------------
         if t == 1:
-            await emit(_turn(len(turns) + 1, "user", scenario.get("opening_message", "Hello?")))
+            await emit(_turn(len(turns) + 1, "user", scenario.get("opening_message", "Hello?"),
+                             round_no=t))
         else:
             sim = await next_user_message(simulator_model, persona, turns, t, user_turns)
             if sim.status != "ok":
                 error = f"simulator failed on turn {t}: {sim.error}"
                 break
-            await emit(_turn(len(turns) + 1, "user", sim, sim.latency_ms))
+            await emit(_turn(len(turns) + 1, "user", sim, sim.latency_ms, round_no=t))
         target_messages.append({"role": "user", "content": turns[-1]["content"]})
 
         # -- model under test replies ----------------------------------------
@@ -185,17 +220,28 @@ async def run_agent(
             max_tokens=EVAL_CONFIG["max_tokens"], purpose="target_reply",
         )
         if reply.status != "ok":
-            await emit(_turn(len(turns) + 1, "assistant",
-                             f"(no reply — error: {reply.error})", reply.latency_ms, reply.error))
+            failed = _turn(len(turns) + 1, "assistant",
+                           f"(no reply — error: {reply.error})", reply.latency_ms, reply.error,
+                           round_no=t)
+            failed["by"] = "target"
+            await emit(failed)
             target_messages.append({"role": "assistant", "content": "(no reply)"})
             # The persona still gets to judge an assistant that errored out.
             continue
-        await emit(_turn(len(turns) + 1, "assistant", reply, reply.latency_ms))
+        await emit(_turn(len(turns) + 1, "assistant", reply, reply.latency_ms, round_no=t))
         target_messages.append({"role": "assistant", "content": reply.text})
 
     priorities = persona.get("priorities") or {}
     fb = await write_feedback(simulator_model, persona, turns)
+    feedback_tokens = dict(fb.usage or empty_usage())
     feedback = parse_feedback(fb.text) if fb.status == "ok" else None
+    if feedback is None and fb.status == "ok":
+        # One more try: same form, the model just did not produce usable JSON.
+        retry = await write_feedback(simulator_model, persona, turns)
+        add_usage(feedback_tokens, retry.usage or {})
+        if retry.status == "ok":
+            feedback = parse_feedback(retry.text)
+            fb = retry
     if feedback is None:
         error = error or f"feedback unparsable: {fb.error or (fb.text or '')[:200]}"
         score = 0.0
@@ -211,11 +257,44 @@ async def run_agent(
         "scenario_title": scenario.get("title", ""),
         "priorities": priorities,
         "turns": turns,
+        "rounds": summarize_rounds(turns),
+        "tokens": summarize_tokens(turns, feedback_tokens),
         "feedback": feedback,
         "score": score,
         "status": status,
         "error": error,
     }
+
+
+def summarize_rounds(turns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Per round (one persona message + one model reply): tokens and latency."""
+    rounds: Dict[int, Dict[str, Any]] = {}
+    for turn in turns:
+        r = rounds.setdefault(turn.get("round", 0), {
+            "round": turn.get("round", 0), "simulator_tokens": 0, "target_tokens": 0,
+            "total_tokens": 0, "latency_ms": 0,
+        })
+        tokens = int((turn.get("tokens") or {}).get("total", 0))
+        if turn.get("by") == "target":
+            r["target_tokens"] += tokens
+        elif turn.get("by") == "simulator":
+            r["simulator_tokens"] += tokens
+        r["total_tokens"] += tokens
+        r["latency_ms"] += int(turn.get("latency_ms", 0))
+    return [rounds[k] for k in sorted(rounds)]
+
+
+def summarize_tokens(turns: List[Dict[str, Any]], feedback_tokens: Dict[str, Any]) -> Dict[str, Any]:
+    """Token spend for one agent, split by who spent it."""
+    target, simulator = empty_usage(), empty_usage()
+    for turn in turns:
+        if turn.get("by") == "target":
+            add_usage(target, turn.get("tokens") or {})
+        elif turn.get("by") == "simulator":
+            add_usage(simulator, turn.get("tokens") or {})
+    add_usage(simulator, feedback_tokens)
+    total = add_usage(add_usage(empty_usage(), target), simulator)
+    return {"target": target, "simulator": simulator, "feedback": feedback_tokens, "total": total}
 
 
 def feedback_preview(feedback: Optional[Dict[str, Any]]) -> str:

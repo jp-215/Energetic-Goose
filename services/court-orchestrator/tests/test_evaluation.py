@@ -182,3 +182,73 @@ def test_meta(client):
     assert {b["name"] for b in body["benchmarks"]} >= {"mmlu", "gsm8k", "arc_challenge"}
     assert any(m["region"] == "CN" for m in body["catalog"])
     assert any(m["region"] == "US" for m in body["catalog"])
+
+
+# --- progress, ETA, tokens ---------------------------------------------------
+
+def test_progress_events_and_token_accounting(client):
+    events = _run(client, ["vendor-a/model-x"], agent_ids=["maya-chen", "priya-nair"],
+                  benchmarks=["mmlu", "gsm8k"])
+    progress = [e for e in events if e["event"] == "progress"]
+    assert progress, "progress events should be emitted"
+    # monotonic percent, ends at 100 with the three stages done
+    pcts = [p["percent"] for p in progress]
+    assert pcts == sorted(pcts)
+    last = progress[-1]
+    assert last["percent"] == 100.0
+    assert last["stage"] == "done"
+    assert {s["status"] for s in last["stages"].values()} == {"done"}
+    # units: 3 items x 2 benchmarks + 2 agents x (2 turns x 2 calls)
+    assert last["units_total"] == 6 + 2 * 4
+    assert last["units_done"] == last["units_total"]
+    assert last["eta_s"] == 0.0
+    # an ETA exists once the first benchmark item is in
+    mid = next(p for p in progress if p["stages"]["benchmarks"]["done"] >= 1)
+    assert mid["eta_s"] is not None and mid["eta_s"] >= 0
+    # running token totals are non-decreasing and split by stage
+    totals = [p["tokens"]["total"] for p in progress]
+    assert totals == sorted(totals) and totals[-1] > 0
+    assert last["tokens_by_stage"]["benchmarks"]["total"] > 0
+    assert last["tokens_by_stage"]["agents"]["target"]["total"] > 0
+    assert last["tokens_by_stage"]["agents"]["simulator"]["total"] > 0
+
+    session = next(e for e in events if e["event"] == "session_done")["session"]
+    tok = session["tokens"]
+    assert tok["total"]["total"] == (
+        tok["benchmarks"]["total"] + tok["agents"]["target"]["total"] + tok["agents"]["simulator"]["total"]
+    )
+    assert set(tok["per_agent"]) == {"maya-chen", "priya-nair"}
+    assert set(tok["per_benchmark"]) == {"mmlu", "gsm8k"}
+    assert session["timings"]["total_s"] >= 0
+    for agent in session["agents"]:
+        # each turn is attributed to who spent the tokens
+        assert agent["turns"][0]["by"] == "script" and agent["turns"][0]["tokens"]["total"] == 0
+        assert {t["by"] for t in agent["turns"][1:]} <= {"target", "simulator"}
+        # per-round roll-up matches the turns
+        assert [r["round"] for r in agent["rounds"]] == [1, 2]
+        assert sum(r["total_tokens"] for r in agent["rounds"]) == (
+            agent["tokens"]["target"]["total"] + agent["tokens"]["simulator"]["total"]
+            - agent["tokens"]["feedback"]["total"]
+        )
+        assert agent["tokens"]["feedback"]["total"] > 0
+    # summaries carry percent + tokens for the sessions table
+    summary = client.get("/api/eval/sessions").json()["sessions"][0]
+    assert summary["percent"] == 100.0 and summary["total_tokens"] == tok["total"]["total"]
+
+
+def test_probe_models(client):
+    body = client.post("/api/eval/models/probe", json={"models": ["a/one", "b/two"]}).json()
+    assert body["accessible"] == ["a/one", "b/two"]
+    assert all(r["latency_ms"] >= 0 and r["tokens"]["total"] > 0 for r in body["results"])
+
+
+def test_feedback_salvage_from_truncated_json():
+    from app.core.agents import parse_feedback
+
+    truncated = '```json\n{\n  "ratings": {\n    "helpfulness": 9,\n    "accuracy": 8,\n    "clarity": 7,\n    "tone": 9,\n    "trust": 8\n  },\n  "would_use_again": true,\n  "summary": "It answered fast and'
+    fb = parse_feedback(truncated)
+    assert fb is not None
+    assert fb["ratings"] == {"helpfulness": 9, "accuracy": 8, "clarity": 7, "tone": 9, "trust": 8}
+    assert fb["would_use_again"] is True
+    assert fb["summary"].startswith("It answered fast")
+    assert parse_feedback('garbage "helpfulness": 9 garbage') is None  # too little to salvage

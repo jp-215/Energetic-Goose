@@ -19,6 +19,13 @@ class EvaluationRequest(BaseModel):
     label: str = Field("", max_length=120)
 
 
+class TokenUsage(BaseModel):
+    prompt: int = 0
+    completion: int = 0
+    total: int = 0
+    estimated: bool = False
+
+
 class BenchmarkItemResult(BaseModel):
     id: str
     question: str
@@ -28,6 +35,7 @@ class BenchmarkItemResult(BaseModel):
     predicted: Optional[str]
     correct: bool
     latency_ms: int
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
     error: Optional[str] = None
 
 
@@ -41,16 +49,35 @@ class BenchmarkResult(BaseModel):
     score: float
     errors: int
     avg_latency_ms: int
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
     items: List[BenchmarkItemResult]
 
 
 class Turn(BaseModel):
     id: str
     index: int
+    round: int = 0
     role: str  # user (persona) | assistant (model under test)
+    by: str = "script"  # simulator | target | script — who spent the tokens
     content: str
     latency_ms: int = 0
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
     error: Optional[str] = None
+
+
+class RoundUsage(BaseModel):
+    round: int
+    simulator_tokens: int
+    target_tokens: int
+    total_tokens: int
+    latency_ms: int
+
+
+class AgentTokens(BaseModel):
+    target: TokenUsage = Field(default_factory=TokenUsage)
+    simulator: TokenUsage = Field(default_factory=TokenUsage)
+    feedback: TokenUsage = Field(default_factory=TokenUsage)
+    total: TokenUsage = Field(default_factory=TokenUsage)
 
 
 class Feedback(BaseModel):
@@ -70,10 +97,34 @@ class AgentResult(BaseModel):
     scenario_title: str
     priorities: Dict[str, float]
     turns: List[Turn]
+    rounds: List[RoundUsage] = Field(default_factory=list)
+    tokens: AgentTokens = Field(default_factory=AgentTokens)
     feedback: Optional[Feedback]
     score: float
     status: str
     error: Optional[str] = None
+
+
+class StageProgress(BaseModel):
+    status: str = "pending"  # pending | running | done | error
+    done: int = 0
+    total: int = 0
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    seconds: Optional[float] = None
+
+
+class Progress(BaseModel):
+    stage: str
+    units_done: int
+    units_total: int
+    percent: float
+    elapsed_s: float
+    eta_s: Optional[float] = None
+    eta_is_estimate: bool = True
+    stages: Dict[str, StageProgress]
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
+    tokens_by_stage: Dict[str, Any] = Field(default_factory=dict)
 
 
 class Session(BaseModel):
@@ -94,6 +145,9 @@ class Session(BaseModel):
     final_score: Optional[float] = None
     benchmarks: List[BenchmarkResult] = Field(default_factory=list)
     agents: List[AgentResult] = Field(default_factory=list)
+    progress: Optional[Progress] = None
+    tokens: Optional[Dict[str, Any]] = None
+    timings: Optional[Dict[str, float]] = None
     error: Optional[str] = None
 
 
@@ -112,6 +166,9 @@ class SessionSummary(BaseModel):
     final_score: Optional[float]
     agent_count: int
     benchmark_count: int
+    percent: Optional[float] = None
+    eta_s: Optional[float] = None
+    total_tokens: Optional[int] = None
 
 
 class SessionListResponse(BaseModel):
@@ -183,3 +240,20 @@ class EvalMetaResponse(BaseModel):
     simulator_model: str
     mock_mode: bool
     graph: Dict[str, Any]
+
+
+class ModelProbeRequest(BaseModel):
+    models: Optional[List[str]] = Field(None, description="Default: every model on the platform")
+
+
+class ModelProbeResult(BaseModel):
+    model: str
+    accessible: bool
+    latency_ms: int
+    error: Optional[str] = None
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
+
+
+class ModelProbeResponse(BaseModel):
+    results: List[ModelProbeResult]
+    accessible: List[str]

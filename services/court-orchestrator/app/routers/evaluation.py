@@ -14,6 +14,8 @@ from ..models.evaluation import (
     EvalMetaResponse,
     EvaluationRequest,
     GraphResponse,
+    ModelProbeRequest,
+    ModelProbeResponse,
     RankingsResponse,
     Session,
     SessionListResponse,
@@ -36,6 +38,12 @@ def _ndjson(agen):
 @router.get("/meta", response_model=EvalMetaResponse)
 async def meta() -> Dict[str, Any]:
     return await eval_handler.eval_meta()
+
+
+@router.post("/models/probe", response_model=ModelProbeResponse)
+async def probe_models(req: ModelProbeRequest = None) -> Dict[str, Any]:  # type: ignore[assignment]
+    """Check which platform models this key can actually call (one tiny request each)."""
+    return await eval_handler.probe_models(req.models if req else None)
 
 
 @router.post("/run", response_model=List[Session])

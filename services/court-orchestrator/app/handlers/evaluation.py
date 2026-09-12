@@ -1,22 +1,24 @@
 """Model-evaluation business logic.
 
-A session evaluates ONE model in two halves:
+A session evaluates ONE model in three stages:
 
-  1. Benchmark session  — open-source benchmark subsets (MMLU, GSM8K, ...)
-  2. Agent session      — persona agents use the model and grade the experience
-
-final = w_bench * benchmark_score + w_agents * agent_score   (default 50/50)
+  1. benchmarks  — open-source benchmark subsets (MMLU, GSM8K, ...)
+  2. agents      — persona agents use the model and grade the experience
+  3. scoring     — final = w_bench * benchmark_score + w_agents * agent_score
 
 Every step is persisted to the sessions store as it happens (so a running
-session can be viewed live) and mirrored into the interaction graph (Neo4j or
-the in-memory fallback).
+session can be viewed live), a `progress` event with percent / elapsed / ETA /
+tokens is emitted after every model call, and the interaction graph (Neo4j or
+the in-memory fallback) is updated off the event loop.
 """
 
 from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 import random
+import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -35,6 +37,7 @@ from ..core.config import (
     model_region,
 )
 from ..core.graph import get_graph
+from ..core.llm import add_usage, chat, empty_usage
 from ..core.store import sessions as session_store
 from ..models.evaluation import EvaluationRequest
 
@@ -55,8 +58,13 @@ def _vendor(model: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _new_session(model: str, req: EvaluationRequest, personas: List[Dict[str, Any]],
-                 bench_names: List[str]) -> Dict[str, Any]:
+                 benches: List[Dict[str, Any]]) -> Dict[str, Any]:
     w_bench = EVAL_WEIGHTS["benchmark"] if req.benchmark_weight is None else req.benchmark_weight
+    items = req.items_per_benchmark or EVAL_CONFIG["items_per_benchmark"]
+    turns = req.agent_turns or EVAL_CONFIG["agent_turns"]
+    bench_units = sum(min(items, len(b["items"])) for b in benches)
+    # per agent: (turns - 1) simulator messages + turns target replies + 1 feedback form
+    agent_units = len(personas) * (2 * turns)
     return {
         "id": uuid.uuid4().hex[:12],
         "label": req.label or "",
@@ -70,11 +78,11 @@ def _new_session(model: str, req: EvaluationRequest, personas: List[Dict[str, An
         "stage": "queued",
         "weights": {"benchmark": round(w_bench, 4), "agents": round(1 - w_bench, 4)},
         "config": {
-            "items_per_benchmark": req.items_per_benchmark or EVAL_CONFIG["items_per_benchmark"],
-            "agent_turns": req.agent_turns or EVAL_CONFIG["agent_turns"],
+            "items_per_benchmark": items,
+            "agent_turns": turns,
             "seed": req.seed if req.seed is not None else random.randint(1, 10**6),
             "agent_ids": [p["id"] for p in personas],
-            "benchmarks": bench_names,
+            "benchmarks": [b["name"] for b in benches],
             "mock_mode": is_mock_mode(),
         },
         "benchmark_score": None,
@@ -82,6 +90,27 @@ def _new_session(model: str, req: EvaluationRequest, personas: List[Dict[str, An
         "final_score": None,
         "benchmarks": [],
         "agents": [],
+        "progress": {
+            "stage": "queued",
+            "units_done": 0,
+            "units_total": bench_units + agent_units,
+            "percent": 0.0,
+            "elapsed_s": 0.0,
+            "eta_s": None,
+            "eta_is_estimate": True,
+            "stages": {
+                "benchmarks": {"status": "pending", "done": 0, "total": bench_units},
+                "agents": {"status": "pending", "done": 0, "total": agent_units},
+                "scoring": {"status": "pending", "done": 0, "total": 1},
+            },
+            "tokens": empty_usage(),
+            "tokens_by_stage": {
+                "benchmarks": empty_usage(),
+                "agents": {"target": empty_usage(), "simulator": empty_usage()},
+            },
+        },
+        "tokens": None,
+        "timings": None,
         "error": None,
     }
 
@@ -91,6 +120,7 @@ def _save(session: Dict[str, Any]) -> None:
 
 
 def _summary(session: Dict[str, Any]) -> Dict[str, Any]:
+    progress = session.get("progress") or {}
     return {
         key: session.get(key)
         for key in (
@@ -100,12 +130,133 @@ def _summary(session: Dict[str, Any]) -> Dict[str, Any]:
     } | {
         "agent_count": len(session.get("agents", [])),
         "benchmark_count": len(session.get("benchmarks", [])),
+        "percent": progress.get("percent"),
+        "eta_s": progress.get("eta_s"),
+        "total_tokens": (progress.get("tokens") or {}).get("total"),
     }
 
 
 # ---------------------------------------------------------------------------
-# Graph mirroring
+# Progress / ETA bookkeeping
 # ---------------------------------------------------------------------------
+
+class ProgressTracker:
+    """Counts completed model calls per stage and predicts the remaining time.
+
+    ETA = remaining benchmark items x measured wall-clock per item
+        + remaining agent calls x measured wall-clock per agent call
+    Until the agent stage has produced data, its rate is extrapolated from the
+    benchmark call latency (agent replies are longer, but agents run in
+    parallel), and the ETA is flagged as an estimate.
+    """
+
+    def __init__(self, session: Dict[str, Any], n_agents: int):
+        self.session = session
+        self.p = session["progress"]
+        self.started = time.perf_counter()
+        self.stage_started: Dict[str, float] = {}
+        self.n_agents = max(1, n_agents)
+        self.bench_latencies_ms: List[int] = []
+        self.agent_started = False
+
+    # -- stages ---------------------------------------------------------------
+    def start_stage(self, stage: str) -> None:
+        self.stage_started[stage] = time.perf_counter()
+        self.p["stage"] = stage
+        self.session["stage"] = stage
+        self.p["stages"][stage]["status"] = "running"
+        self.p["stages"][stage]["started_at"] = _now()
+        if stage == "agents":
+            self.agent_started = True
+        self._recompute()
+
+    def finish_stage(self, stage: str, status: str = "done") -> None:
+        st = self.p["stages"][stage]
+        st["status"] = status
+        st["finished_at"] = _now()
+        st["seconds"] = round(time.perf_counter() - self.stage_started.get(stage, self.started), 2)
+        if status == "done":
+            st["done"] = st["total"]
+        self._recompute()
+
+    # -- units ----------------------------------------------------------------
+    def bench_item(self, tokens: Dict[str, Any], latency_ms: int) -> None:
+        self.p["stages"]["benchmarks"]["done"] += 1
+        self.bench_latencies_ms.append(latency_ms)
+        add_usage(self.p["tokens_by_stage"]["benchmarks"], tokens)
+        add_usage(self.p["tokens"], tokens)
+        self._recompute()
+
+    def agent_call(self, by: str, tokens: Dict[str, Any]) -> None:
+        self.p["stages"]["agents"]["done"] += 1
+        if by in ("target", "simulator"):
+            add_usage(self.p["tokens_by_stage"]["agents"][by], tokens)
+        add_usage(self.p["tokens"], tokens)
+        self._recompute()
+
+    # -- maths ----------------------------------------------------------------
+    def _recompute(self) -> None:
+        p = self.p
+        st = p["stages"]
+        now = time.perf_counter()
+        p["elapsed_s"] = round(now - self.started, 1)
+        done = st["benchmarks"]["done"] + st["agents"]["done"]
+        p["units_done"] = done
+        p["percent"] = min(100.0, round(100.0 * done / p["units_total"], 1)) if p["units_total"] else 0.0
+
+        # measured wall-clock per benchmark item (concurrency already baked in)
+        bench_rate = None
+        if st["benchmarks"]["done"]:
+            elapsed = now - self.stage_started.get("benchmarks", self.started)
+            bench_rate = elapsed / st["benchmarks"]["done"]
+
+        # measured wall-clock per agent call, or extrapolated from benchmark latency
+        agent_rate, estimate = None, True
+        if st["agents"]["done"] and self.agent_started:
+            elapsed = now - self.stage_started.get("agents", now)
+            agent_rate = elapsed / st["agents"]["done"]
+            estimate = st["agents"]["done"] < self.n_agents  # too few samples yet
+        elif self.bench_latencies_ms:
+            avg_call_s = sum(self.bench_latencies_ms) / len(self.bench_latencies_ms) / 1000.0
+            # agent replies are ~3.5x longer than a one-letter answer; agents run in parallel
+            agent_rate = max(0.5, avg_call_s * 3.5 / self.n_agents)
+
+        remaining_bench = st["benchmarks"]["total"] - st["benchmarks"]["done"]
+        remaining_agent = st["agents"]["total"] - st["agents"]["done"]
+        eta = 0.0
+        known = True
+        if remaining_bench:
+            if bench_rate is None:
+                known = False
+            else:
+                eta += remaining_bench * bench_rate
+        if remaining_agent:
+            if agent_rate is None:
+                known = False
+            else:
+                eta += remaining_agent * agent_rate
+        p["eta_s"] = round(eta, 1) if known else None
+        p["eta_is_estimate"] = estimate or not known
+
+    def snapshot(self) -> Dict[str, Any]:
+        # deep copy: the event sits in a queue while the tracker keeps mutating
+        return {"event": "progress", "session_id": self.session["id"],
+                **json.loads(json.dumps(self.p))}
+
+
+# ---------------------------------------------------------------------------
+# Graph mirroring (runs in a worker thread: Neo4j round-trips must not block
+# the event loop that is streaming progress to the client)
+# ---------------------------------------------------------------------------
+
+async def _graph(fn, *args) -> None:
+    try:
+        await asyncio.to_thread(fn, *args)
+    except Exception as exc:  # the graph is a mirror; never fail the session over it
+        import logging
+
+        logging.getLogger("datacat").warning("graph mirror failed in %s: %s", fn.__name__, exc)
+
 
 def _graph_session_start(session: Dict[str, Any], personas: List[Dict[str, Any]]) -> None:
     g = get_graph()
@@ -133,7 +284,8 @@ def _graph_benchmark(session: Dict[str, Any], result: Dict[str, Any]) -> None:
     g.merge_node("Benchmark", {"name": result["name"], "display_name": result["display_name"],
                                "source": result["source"], "task_type": result["task_type"]})
     g.merge_rel("Session", session["id"], "RAN_BENCHMARK", "Benchmark", result["name"],
-                {"score": result["score"], "correct": result["correct"], "total": result["total"]})
+                {"score": result["score"], "correct": result["correct"], "total": result["total"],
+                 "tokens": result["tokens"]["total"]})
 
 
 def _graph_turn(session: Dict[str, Any], persona: Dict[str, Any], turn: Dict[str, Any],
@@ -141,8 +293,10 @@ def _graph_turn(session: Dict[str, Any], persona: Dict[str, Any], turn: Dict[str
     g = get_graph()
     turn_id = f"{session['id']}:{persona['id']}:{turn['index']}"
     g.merge_node("Turn", {
-        "id": turn_id, "index": turn["index"], "role": turn["role"],
+        "id": turn_id, "index": turn["index"], "round": turn.get("round", 0),
+        "role": turn["role"], "by": turn.get("by", ""),
         "content": turn["content"][:1500], "latency_ms": turn.get("latency_ms", 0),
+        "tokens": int((turn.get("tokens") or {}).get("total", 0)),
         "session_id": session["id"], "agent_id": persona["id"],
     })
     g.merge_rel("Turn", turn_id, "IN_SESSION", "Session", session["id"])
@@ -164,6 +318,7 @@ def _graph_feedback(session: Dict[str, Any], agent_result: Dict[str, Any]) -> No
         "would_use_again": bool(fb.get("would_use_again", False)),
         "summary": fb.get("summary", ""), "quote": fb.get("quote", ""),
         "ratings_json": fb.get("ratings", {}),
+        "tokens": int(agent_result["tokens"]["total"]["total"]),
         **{f"rating_{k}": v for k, v in (fb.get("ratings") or {}).items()},
     })
     g.merge_rel("Agent", agent_result["agent_id"], "GAVE", "Feedback", fid)
@@ -172,6 +327,8 @@ def _graph_feedback(session: Dict[str, Any], agent_result: Dict[str, Any]) -> No
     g.merge_rel("Agent", agent_result["agent_id"], "INTERACTED_WITH", "Model", session["model"], {
         "session_id": session["id"], "turns": len(agent_result["turns"]),
         "score": agent_result["score"], "scenario": agent_result["scenario_title"],
+        "tokens_target": int(agent_result["tokens"]["target"]["total"]),
+        "tokens_simulator": int(agent_result["tokens"]["simulator"]["total"]),
     })
 
 
@@ -180,6 +337,8 @@ def _graph_session_end(session: Dict[str, Any]) -> None:
         "id": session["id"], "status": session["status"], "finished_at": session["finished_at"],
         "benchmark_score": session["benchmark_score"], "agent_score": session["agent_score"],
         "final_score": session["final_score"],
+        "total_tokens": int(((session.get("tokens") or {}).get("total") or {}).get("total", 0)),
+        "total_seconds": (session.get("timings") or {}).get("total_s"),
     })
 
 
@@ -205,99 +364,160 @@ def _resolve_inputs(req: EvaluationRequest):
 async def run_session_events(model: str, req: EvaluationRequest) -> AsyncIterator[Dict[str, Any]]:
     """Evaluate one model, yielding progress events as they happen."""
     personas, benches = _resolve_inputs(req)
-    session = _new_session(model, req, personas, [b["name"] for b in benches])
+    session = _new_session(model, req, personas, benches)
     _save(session)
-    _graph_session_start(session, personas)
+    await _graph(_graph_session_start, session, personas)
     yield {"event": "session_created", "session": _summary(session)}
 
     queue: asyncio.Queue = asyncio.Queue()
     cfg = session["config"]
+    tracker = ProgressTracker(session, len(personas))
+    save_lock = asyncio.Lock()
 
     async def push(event: Dict[str, Any]) -> None:
         await queue.put(event)
 
+    async def progress() -> None:
+        await push(tracker.snapshot())
+
+    async def persist() -> None:
+        async with save_lock:
+            _save(session)
+
     async def do_benchmarks() -> None:
-        session["stage"] = "benchmarks"
-        _save(session)
+        tracker.start_stage("benchmarks")
+        await persist()
         await push({"event": "stage", "session_id": session["id"], "stage": "benchmarks",
                     "benchmarks": [b["name"] for b in benches]})
+        await progress()
         for bench in benches:
             done = {"n": 0}
+            total = min(cfg["items_per_benchmark"], len(bench["items"]))
 
-            async def on_item(record, bench=bench, done=done):
+            async def on_item(record, bench=bench, done=done, total=total):
                 done["n"] += 1
+                tracker.bench_item(record["tokens"], record["latency_ms"])
                 await push({"event": "benchmark_item", "session_id": session["id"],
-                            "benchmark": bench["name"], "done": done["n"],
-                            "total": min(cfg["items_per_benchmark"], len(bench["items"])),
-                            "correct": record["correct"], "item_id": record["id"]})
+                            "benchmark": bench["name"], "done": done["n"], "total": total,
+                            "correct": record["correct"], "item_id": record["id"],
+                            "tokens": record["tokens"], "latency_ms": record["latency_ms"]})
+                await progress()
 
             result = await bench_core.run_benchmark(
                 model, bench, cfg["items_per_benchmark"], cfg["seed"], on_item
             )
             session["benchmarks"].append(result)
-            _save(session)
-            _graph_benchmark(session, result)
+            await persist()
+            await _graph(_graph_benchmark, session, result)
             await push({"event": "benchmark_result", "session_id": session["id"],
                         "result": {k: v for k, v in result.items() if k != "items"}})
         scores = [b["score"] for b in session["benchmarks"]]
         session["benchmark_score"] = round(sum(scores) / len(scores), 2) if scores else 0.0
-        _save(session)
+        tracker.finish_stage("benchmarks")
+        await persist()
 
     async def do_agents() -> None:
-        session["stage"] = "agents"
-        _save(session)
+        tracker.start_stage("agents")
+        await persist()
         await push({"event": "stage", "session_id": session["id"], "stage": "agents",
                     "agents": [p["id"] for p in personas]})
+        await progress()
+
+        gate = asyncio.Semaphore(EVAL_CONFIG["agent_concurrency"])
 
         async def one(persona: Dict[str, Any]) -> Dict[str, Any]:
+            async with gate:
+                return await _one(persona)
+
+        async def _one(persona: Dict[str, Any]) -> Dict[str, Any]:
             last = {"id": None}
 
             async def on_turn(turn, persona=persona, last=last):
-                _graph_turn(session, persona, turn, last["id"])
+                await _graph(_graph_turn, session, persona, turn, last["id"])
                 last["id"] = f"{session['id']}:{persona['id']}:{turn['index']}"
+                if turn.get("by") in ("target", "simulator"):
+                    tracker.agent_call(turn["by"], turn["tokens"])
                 await push({"event": "agent_turn", "session_id": session["id"],
                             "agent_id": persona["id"], "agent_name": persona["name"],
                             "turn": turn})
+                await progress()
 
             result = await run_agent(model, session["simulator_model"], persona,
                                      cfg["agent_turns"], on_turn)
+            # the feedback form is the agent's last model call
+            tracker.agent_call("simulator", result["tokens"]["feedback"])
             session["agents"].append(result)
-            _save(session)
-            _graph_feedback(session, result)
+            await persist()
+            await _graph(_graph_feedback, session, result)
             await push({"event": "agent_feedback", "session_id": session["id"],
                         "agent_id": persona["id"], "agent_name": persona["name"],
                         "score": result["score"], "status": result["status"],
-                        "feedback": result["feedback"]})
+                        "feedback": result["feedback"], "tokens": result["tokens"],
+                        "rounds": result["rounds"]})
+            await progress()
             return result
 
         await asyncio.gather(*(one(p) for p in personas))
         graded = [a["score"] for a in session["agents"] if a["status"] != "error"]
         session["agent_score"] = round(sum(graded) / len(graded), 2) if graded else 0.0
-        _save(session)
+        tracker.finish_stage("agents")
+        await persist()
+
+    def do_scoring() -> None:
+        tracker.start_stage("scoring")
+        w = session["weights"]
+        session["final_score"] = round(
+            w["benchmark"] * (session["benchmark_score"] or 0.0)
+            + w["agents"] * (session["agent_score"] or 0.0), 2
+        )
+        # token + timing roll-ups
+        bench_tokens = empty_usage()
+        for b in session["benchmarks"]:
+            add_usage(bench_tokens, b["tokens"])
+        target, simulator = empty_usage(), empty_usage()
+        for a in session["agents"]:
+            add_usage(target, a["tokens"]["target"])
+            add_usage(simulator, a["tokens"]["simulator"])
+        total = add_usage(add_usage(add_usage(empty_usage(), bench_tokens), target), simulator)
+        session["tokens"] = {
+            "benchmarks": bench_tokens,
+            "agents": {"target": target, "simulator": simulator,
+                       "total": add_usage(add_usage(empty_usage(), target), simulator)},
+            "model_under_test": add_usage(add_usage(empty_usage(), bench_tokens), target),
+            "total": total,
+            "per_benchmark": {b["name"]: b["tokens"] for b in session["benchmarks"]},
+            "per_agent": {a["agent_id"]: a["tokens"] for a in session["agents"]},
+        }
+        st = tracker.p["stages"]
+        session["timings"] = {
+            "benchmarks_s": st["benchmarks"].get("seconds") or 0.0,
+            "agents_s": st["agents"].get("seconds") or 0.0,
+            "total_s": round(time.perf_counter() - tracker.started, 2),
+        }
+        tracker.finish_stage("scoring")
+        session["status"] = "done"
+        session["stage"] = "done"
+        tracker.p["stage"] = "done"
+        tracker.p["eta_s"] = 0.0
+        tracker.p["percent"] = 100.0
 
     async def pipeline() -> None:
         try:
             await do_benchmarks()
             await do_agents()
-            session["stage"] = "scoring"
-            w = session["weights"]
-            session["final_score"] = round(
-                w["benchmark"] * (session["benchmark_score"] or 0.0)
-                + w["agents"] * (session["agent_score"] or 0.0), 2
-            )
-            session["status"] = "done"
-            session["stage"] = "done"
+            do_scoring()
         except Exception as exc:  # keep the session document consistent on failure
             session["status"] = "error"
             session["stage"] = "error"
             session["error"] = str(exc)
+            tracker.p["stage"] = "error"
+            for stage in tracker.p["stages"].values():
+                if stage["status"] == "running":
+                    stage["status"] = "error"
         finally:
             session["finished_at"] = _now()
-            _save(session)
-            try:
-                _graph_session_end(session)
-            except Exception:
-                pass
+            await persist()
+            await _graph(_graph_session_end, session)
             await queue.put(None)
 
     task = asyncio.create_task(pipeline())
@@ -307,6 +527,7 @@ async def run_session_events(model: str, req: EvaluationRequest) -> AsyncIterato
             break
         yield event
     await task
+    yield tracker.snapshot()
     yield {"event": "session_done", "session": session}
 
 
@@ -332,7 +553,7 @@ async def run_many(req: EvaluationRequest) -> List[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Sessions / rankings / graph / meta
+# Sessions / rankings / graph / meta / probe
 # ---------------------------------------------------------------------------
 
 def list_sessions() -> List[Dict[str, Any]]:
@@ -445,6 +666,25 @@ def run_cypher(query: str, params: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"cypher failed: {exc}") from exc
+
+
+async def probe_models(models: Optional[List[str]]) -> Dict[str, Any]:
+    """One tiny call per model to find out which ids this key can actually use."""
+    if not models:
+        try:
+            models = await fetch_supported_model_ids()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"platform unreachable: {exc}") from exc
+
+    async def one(model: str) -> Dict[str, Any]:
+        result = await chat(model, [{"role": "user", "content": "Reply with the single letter B."}],
+                            temperature=0.0, max_tokens=64, purpose="benchmark_mc")
+        return {"model": model, "accessible": result.status == "ok",
+                "latency_ms": result.latency_ms, "error": result.error,
+                "tokens": result.usage or empty_usage()}
+
+    results = await asyncio.gather(*(one(m) for m in models))
+    return {"results": list(results), "accessible": [r["model"] for r in results if r["accessible"]]}
 
 
 async def eval_meta() -> Dict[str, Any]:

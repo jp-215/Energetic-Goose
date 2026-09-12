@@ -238,11 +238,11 @@ class MemoryGraphStore(GraphStore):
 class Neo4jGraphStore(GraphStore):
     backend = "neo4j"
 
-    def __init__(self, uri: str, user: str, password: str, database: str = "neo4j"):
+    def __init__(self, uri: str, user: str, password: str, database: str = ""):
         from neo4j import GraphDatabase  # imported lazily: optional dependency at runtime
 
         self._uri = uri
-        self._database = database
+        self._database = database or None  # None -> server default database
         self._driver = GraphDatabase.driver(uri, auth=(user, password))
         self._driver.verify_connectivity()
         self._ensure_constraints()
@@ -312,7 +312,11 @@ class Neo4jGraphStore(GraphStore):
         if not rows:
             return {"nodes": [], "relationships": []}
         row = rows[0]
-        return {"nodes": row["nodes"], "relationships": row["relationships"]}
+        # n1/n2 collections overlap; dedupe by element id
+        nodes = {n["id"]: n for n in row["nodes"]}
+        rels = {r["id"]: r for r in row["relationships"]
+                if r["from"] in nodes and r["to"] in nodes}
+        return {"nodes": list(nodes.values()), "relationships": list(rels.values())}
 
     def delete_session(self, session_id: str) -> None:
         self._run(

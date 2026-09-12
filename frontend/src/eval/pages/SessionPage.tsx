@@ -2,24 +2,30 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { deleteSession, fetchSession, fetchSessionGraph, runCypher } from '../api'
 import GraphView from '../components/GraphView'
+import PersonaAvatar from '../components/PersonaAvatar'
+import PersonaModal from '../components/PersonaModal'
+import ProgressStepper from '../components/ProgressStepper'
 import RatingsRadar from '../components/RatingsRadar'
 import { ScoreBar, ScoreRing, fmt, scoreColor } from '../components/ScoreTile'
 import Transcript from '../components/Transcript'
 import { useEvalStore } from '../store'
-import { DIMENSIONS, REGION_FLAG, type AgentResult, type BenchmarkResult, type GraphResponse, type Session } from '../types'
+import { DIMENSIONS, REGION_FLAG, fmtDuration, fmtTokens, type AgentResult, type BenchmarkResult, type GraphResponse, type Session } from '../types'
 
 export default function SessionPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const rerun = useEvalStore((s) => s.rerun)
+  const personas = useEvalStore((s) => s.personas)
+  const loadStore = useEvalStore((s) => s.load)
+  const [openPersona, setOpenPersona] = useState<string | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [graph, setGraph] = useState<GraphResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab')
-  const tab: 'agents' | 'benchmarks' | 'graph' =
-    tabParam === 'benchmarks' || tabParam === 'graph' ? tabParam : 'agents'
-  const setTab = (t: 'agents' | 'benchmarks' | 'graph') => setParams(t === 'agents' ? {} : { tab: t }, { replace: true })
+  type Tab = 'agents' | 'benchmarks' | 'tokens'
+  const tab: Tab = tabParam === 'benchmarks' || tabParam === 'tokens' ? tabParam : 'agents'
+  const setTab = (t: Tab) => setParams(t === 'agents' ? {} : { tab: t }, { replace: true })
 
   const reload = async () => {
     try {
@@ -33,6 +39,7 @@ export default function SessionPage() {
     }
   }
   useEffect(() => {
+    void loadStore()
     let timer: number | undefined
     const tick = async () => {
       const s = await reload()
@@ -47,6 +54,8 @@ export default function SessionPage() {
   if (!session) return <div className="page muted">loading session…</div>
 
   const w = session.weights
+  const excluded = session.agents.filter((a) => a.status === 'error')
+  const graded = session.agents.length - excluded.length
   return (
     <div className="page">
       <div className="session-head">
@@ -65,22 +74,53 @@ export default function SessionPage() {
         </div>
       </div>
       {session.error && <div className="error-text">{session.error}</div>}
+      {session.progress && (session.status === 'running' || session.status === 'error') && (
+        <section className="panel"><ProgressStepper progress={session.progress} /></section>
+      )}
 
       <section className="panel score-panel">
         <ScoreRing score={session.final_score} label="Final score" size={150} sub={`${Math.round(w.benchmark * 100)}% × bench + ${Math.round(w.agents * 100)}% × agents`} />
         <div className="score-eq">=</div>
         <ScoreRing score={session.benchmark_score} label="① Benchmark session" size={120} sub={`${session.benchmarks.length} benchmarks · ${session.config.items_per_benchmark} items each`} />
         <div className="score-eq">+</div>
-        <ScoreRing score={session.agent_score} label="② Agent session" size={120} sub={`${session.agents.length} personas · ${session.config.agent_turns} turns each`} />
+        <ScoreRing score={session.agent_score} label="② Agent session" size={120} sub={`${graded}/${session.config.agent_ids.length} users graded · ${session.config.agent_turns} turns each`} />
         <div className="formula muted small">
           final = {w.benchmark} × {fmt(session.benchmark_score)} + {w.agents} × {fmt(session.agent_score)} = <b>{fmt(session.final_score)}</b>
+          {session.timings && <> · took <b>{fmtDuration(session.timings.total_s)}</b></>}
+          {session.tokens && <> · <b>{fmtTokens(session.tokens.total.total)}</b> tokens{session.tokens.total.estimated ? ' (est.)' : ''}</>}
+        </div>
+        {excluded.length > 0 && (
+          <div className="warn-strip">
+            ⚠ {excluded.length} of {session.agents.length} simulated users could not deliver a verdict ({excluded.map((a) => a.agent_name).join(', ')}) and are excluded from the agent score. Open a user for the error; re-run to try again.
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="card-title">Simulated users <span className="muted small">click an avatar for their personality and verdict</span></div>
+        <div className="avatar-grid">
+          {session.config.agent_ids.map((id) => {
+            const p = personas.find((x) => x.id === id)
+            const r = session.agents.find((a) => a.agent_id === id)
+            const base = p ?? (r ? { id, name: r.agent_name, avatar: r.avatar, tagline: r.scenario_title } : { id, name: id, avatar: '🙂', tagline: '' })
+            return <PersonaAvatar key={id} persona={base} score={r?.score ?? null} status={r ? r.status : session.status === 'running' && session.stage === 'agents' ? 'talking' : 'waiting'} onClick={() => setOpenPersona(id)} />
+          })}
         </div>
       </section>
 
+      <section className="panel graph-section">
+        <div className="card-title">
+          Neo4j interaction graph
+          <span className={`pill ${graph?.backend === 'neo4j' ? 'pill-ok' : 'pill-warn'}`}>{graph?.backend === 'neo4j' ? 'Neo4j' : 'in-memory fallback'}</span>
+          <span className="muted small">{graph ? `${graph.nodes.length} nodes · ${graph.relationships.length} relationships` : 'loading…'} · model at the centre, one spoke per user, turns along the spoke, feedback beyond</span>
+        </div>
+        {graph && <GraphPanel graph={graph} />}
+      </section>
+
       <div className="tabs">
-        <button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>Agent interactions & feedback ({session.agents.length})</button>
+        <button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>User feedback & transcripts ({session.agents.length})</button>
         <button className={tab === 'benchmarks' ? 'active' : ''} onClick={() => setTab('benchmarks')}>Benchmarks ({session.benchmarks.length})</button>
-        <button className={tab === 'graph' ? 'active' : ''} onClick={() => setTab('graph')}>Neo4j graph {graph ? `(${graph.nodes.length} nodes · ${graph.relationships.length} rels)` : ''}</button>
+        <button className={tab === 'tokens' ? 'active' : ''} onClick={() => setTab('tokens')}>Tokens & timing</button>
       </div>
 
       {tab === 'agents' && (
@@ -95,7 +135,12 @@ export default function SessionPage() {
           {session.benchmarks.map((b) => <BenchmarkCard key={b.name} bench={b} />)}
         </div>
       )}
-      {tab === 'graph' && graph && <GraphPanel graph={graph} />}
+      {tab === 'tokens' && <TokensPanel session={session} />}
+      {openPersona && (() => {
+        const p = personas.find((x) => x.id === openPersona)
+        const r = session.agents.find((a) => a.agent_id === openPersona) ?? null
+        return p ? <PersonaModal persona={p} result={r} onClose={() => setOpenPersona(null)} /> : null
+      })()}
     </div>
   )
 }
@@ -109,7 +154,10 @@ function AgentCard({ agent, model }: { agent: AgentResult; model: string }) {
         <div className="agent-avatar big">{agent.avatar}</div>
         <div className="grow">
           <div className="agent-name">{agent.agent_name}</div>
-          <div className="muted small">scenario: {agent.scenario_title} · {agent.turns.length} turns</div>
+          <div className="muted small">
+            scenario: {agent.scenario_title} · {agent.turns.length} turns
+            {agent.tokens && <> · 🤖 {fmtTokens(agent.tokens.target.total)} · 🗣 {fmtTokens(agent.tokens.simulator.total)} tok</>}
+          </div>
         </div>
         <div className="agent-score" style={{ color: scoreColor(agent.score) }}>{fmt(agent.score)}<span className="muted small">/100</span></div>
       </div>
@@ -186,11 +234,7 @@ function GraphPanel({ graph }: { graph: GraphResponse }) {
   const [result, setResult] = useState<string | null>(null)
   const isNeo4j = graph.backend === 'neo4j'
   return (
-    <div className="panel">
-      <div className="graph-status">
-        <span className={`pill ${isNeo4j ? 'pill-ok' : 'pill-warn'}`}>{isNeo4j ? 'Neo4j' : 'in-memory graph (set NEO4J_URI to use Neo4j)'}</span>
-        <span className="muted small">Model at the centre · one spoke per persona agent · turns along the spoke · feedback beyond the agent · session + benchmarks above</span>
-      </div>
+    <div>
       <GraphView graph={graph} />
       <details className="cypher">
         <summary>Cypher for this session {isNeo4j ? '(editable, read-only queries)' : ''}</summary>
@@ -202,6 +246,71 @@ function GraphPanel({ graph }: { graph: GraphResponse }) {
         )}
         {result && <pre className="log">{result}</pre>}
       </details>
+    </div>
+  )
+}
+
+function TokensPanel({ session }: { session: Session }) {
+  const t = session.tokens
+  const tm = session.timings
+  if (!t) return <div className="panel muted">Token accounting appears when the session finishes scoring.</div>
+  const Tile = ({ label, value, sub }: { label: string; value: string; sub?: string }) => (
+    <div className="tile"><div className="tile-value">{value}</div><div className="tile-label">{label}</div>{sub && <div className="muted small">{sub}</div>}</div>
+  )
+  return (
+    <div className="bench-grid">
+      <div className="tiles">
+        <Tile label="total tokens" value={fmtTokens(t.total.total)} sub={`${fmtTokens(t.total.prompt)} prompt · ${fmtTokens(t.total.completion)} completion${t.total.estimated ? ' · estimated' : ''}`} />
+        <Tile label="model under test" value={fmtTokens(t.model_under_test.total)} sub="benchmark answers + replies to agents" />
+        <Tile label="simulator (personas)" value={fmtTokens(t.agents.simulator.total)} sub={`${session.simulator_model}`} />
+        <Tile label="benchmark session" value={fmtTokens(t.benchmarks.total)} sub={tm ? `${fmtDuration(tm.benchmarks_s)}` : ''} />
+        <Tile label="agent session" value={fmtTokens(t.agents.total.total)} sub={tm ? `${fmtDuration(tm.agents_s)}` : ''} />
+        <Tile label="total time" value={fmtDuration(tm?.total_s)} sub="wall clock" />
+      </div>
+
+      <div className="panel">
+        <h3>Per benchmark</h3>
+        <table className="data-table compact">
+          <thead><tr><th>benchmark</th><th className="num">items</th><th className="num">score</th><th className="num">prompt</th><th className="num">completion</th><th className="num">total</th><th className="num">avg latency</th></tr></thead>
+          <tbody>
+            {session.benchmarks.map((b) => (
+              <tr key={b.name}><td>{b.display_name}</td><td className="num">{b.total}</td><td className="num">{b.score}%</td><td className="num">{fmtTokens(b.tokens.prompt)}</td><td className="num">{fmtTokens(b.tokens.completion)}</td><td className="num"><b>{fmtTokens(b.tokens.total)}</b></td><td className="num">{b.avg_latency_ms} ms</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="panel">
+        <h3>Per agent, per round</h3>
+        <p className="muted small">🤖 = tokens spent by the model under test · 🗣 = tokens spent by the simulator playing the persona (its follow-up messages and the feedback form). Round 1's persona message is scripted, so it costs nothing.</p>
+        <table className="data-table compact">
+          <thead><tr><th>agent</th><th>round</th><th className="num">🗣 simulator</th><th className="num">🤖 model</th><th className="num">total</th><th className="num">latency</th></tr></thead>
+          <tbody>
+            {session.agents.map((a) => (
+              <>
+                <tr key={a.agent_id} className="row-group">
+                  <td><b>{a.avatar} {a.agent_name}</b> <span className="muted small">score {a.score}</span></td>
+                  <td className="muted">all rounds + feedback</td>
+                  <td className="num"><b>{fmtTokens(a.tokens.simulator.total)}</b></td>
+                  <td className="num"><b>{fmtTokens(a.tokens.target.total)}</b></td>
+                  <td className="num"><b>{fmtTokens(a.tokens.total.total)}</b></td>
+                  <td className="num">{fmtDuration(a.turns.reduce((acc, x) => acc + x.latency_ms, 0) / 1000)}</td>
+                </tr>
+                {a.rounds.map((r) => (
+                  <tr key={`${a.agent_id}-${r.round}`} className="row-sub">
+                    <td></td><td className="muted">round {r.round}</td>
+                    <td className="num">{fmtTokens(r.simulator_tokens)}</td><td className="num">{fmtTokens(r.target_tokens)}</td><td className="num">{fmtTokens(r.total_tokens)}</td><td className="num">{r.latency_ms} ms</td>
+                  </tr>
+                ))}
+                <tr key={`${a.agent_id}-fb`} className="row-sub">
+                  <td></td><td className="muted">feedback form</td>
+                  <td className="num">{fmtTokens(a.tokens.feedback.total)}</td><td className="num">—</td><td className="num">{fmtTokens(a.tokens.feedback.total)}</td><td className="num"></td>
+                </tr>
+              </>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

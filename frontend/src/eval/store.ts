@@ -1,11 +1,15 @@
 import { create } from 'zustand'
-import { fetchEvalMeta, fetchPersonas, streamEvaluation, streamRerun } from './api'
+import { fetchEvalMeta, fetchPersonas, probeModels, streamEvaluation, streamRerun } from './api'
 import type {
+  AgentTokens,
   EvalEvent,
   EvalMeta,
   EvaluationPayload,
   Feedback,
+  ModelProbeResult,
   Persona,
+  Progress,
+  RoundUsage,
   Session,
   SessionStage,
   Turn,
@@ -19,6 +23,9 @@ export interface AgentProgress {
   feedback: Feedback | null
   score: number | null
   status: 'waiting' | 'talking' | 'ok' | 'partial' | 'error'
+  tokens: AgentTokens | null
+  rounds: RoundUsage[]
+  liveTokens: { target: number; simulator: number }
 }
 
 export interface BenchmarkProgress {
@@ -27,6 +34,7 @@ export interface BenchmarkProgress {
   total: number
   correct: number
   score: number | null
+  tokens: number
 }
 
 export interface RunProgress {
@@ -35,6 +43,7 @@ export interface RunProgress {
   stage: SessionStage | 'queued'
   benchmarks: Record<string, BenchmarkProgress>
   agents: Record<string, AgentProgress>
+  progress: Progress | null
   session: Session | null
 }
 
@@ -53,6 +62,10 @@ interface EvalState {
   benchmarkWeight: number
   label: string
 
+  // model access probe
+  probing: boolean
+  probe: Record<string, ModelProbeResult>
+
   // run
   running: boolean
   runs: RunProgress[]
@@ -67,13 +80,17 @@ interface EvalState {
   toggleBenchmark: (name: string) => void
   setNumber: (field: 'itemsPerBenchmark' | 'agentTurns' | 'benchmarkWeight', v: number) => void
   setLabel: (label: string) => void
+  runProbe: () => Promise<void>
   startRun: () => Promise<void>
   rerun: (sessionId: string) => Promise<void>
   clearRuns: () => void
 }
 
 function emptyAgent(p: Persona): AgentProgress {
-  return { id: p.id, name: p.name, avatar: p.avatar, turns: [], feedback: null, score: null, status: 'waiting' }
+  return {
+    id: p.id, name: p.name, avatar: p.avatar, turns: [], feedback: null, score: null, status: 'waiting',
+    tokens: null, rounds: [], liveTokens: { target: 0, simulator: 0 },
+  }
 }
 
 export const useEvalStore = create<EvalState>((set, get) => ({
@@ -90,10 +107,26 @@ export const useEvalStore = create<EvalState>((set, get) => ({
   benchmarkWeight: 0.5,
   label: '',
 
+  probing: false,
+  probe: {},
+
   running: false,
   runs: [],
   log: [],
   runError: null,
+
+  runProbe: async () => {
+    if (get().probing) return
+    set({ probing: true })
+    try {
+      const res = await probeModels()
+      const probe: Record<string, ModelProbeResult> = {}
+      for (const r of res.results) probe[r.model] = r
+      set({ probe, probing: false })
+    } catch (err) {
+      set({ probing: false, runError: err instanceof Error ? err.message : String(err) })
+    }
+  },
 
   load: async (force = false) => {
     if (get().loading || (get().meta && !force)) return
@@ -197,7 +230,7 @@ function applyEvent(event: EvalEvent, set: Set, get: Get) {
       set((s) => ({
         runs: [
           ...s.runs,
-          { sessionId: event.session.id, model: event.session.model, stage: 'queued', benchmarks: {}, agents, session: null },
+          { sessionId: event.session.id, model: event.session.model, stage: 'queued', benchmarks: {}, agents, progress: null, session: null },
         ],
       }))
       logLine(`session ${event.session.id} created for ${event.session.model}`)
@@ -207,7 +240,7 @@ function applyEvent(event: EvalEvent, set: Set, get: Get) {
       patchRun(event.session_id, (r) => {
         const benchmarks = { ...r.benchmarks }
         for (const name of event.benchmarks ?? []) {
-          benchmarks[name] = benchmarks[name] ?? { name, done: 0, total: 0, correct: 0, score: null }
+          benchmarks[name] = benchmarks[name] ?? { name, done: 0, total: 0, correct: 0, score: null, tokens: 0 }
         }
         return { ...r, stage: event.stage, benchmarks }
       })
@@ -215,12 +248,16 @@ function applyEvent(event: EvalEvent, set: Set, get: Get) {
       break
     case 'benchmark_item':
       patchRun(event.session_id, (r) => {
-        const prev = r.benchmarks[event.benchmark] ?? { name: event.benchmark, done: 0, total: 0, correct: 0, score: null }
+        const prev = r.benchmarks[event.benchmark] ?? { name: event.benchmark, done: 0, total: 0, correct: 0, score: null, tokens: 0 }
         return {
           ...r,
           benchmarks: {
             ...r.benchmarks,
-            [event.benchmark]: { ...prev, done: event.done, total: event.total, correct: prev.correct + (event.correct ? 1 : 0) },
+            [event.benchmark]: {
+              ...prev, done: event.done, total: event.total,
+              correct: prev.correct + (event.correct ? 1 : 0),
+              tokens: prev.tokens + (event.tokens?.total ?? 0),
+            },
           },
         }
       })
@@ -236,6 +273,7 @@ function applyEvent(event: EvalEvent, set: Set, get: Get) {
             total: event.result.total,
             correct: event.result.correct,
             score: event.result.score,
+            tokens: event.result.tokens?.total ?? 0,
           },
         },
       }))
@@ -245,18 +283,36 @@ function applyEvent(event: EvalEvent, set: Set, get: Get) {
       patchRun(event.session_id, (r) => {
         const prev = r.agents[event.agent_id] ?? {
           id: event.agent_id, name: event.agent_name, avatar: '🙂', turns: [], feedback: null, score: null, status: 'talking' as const,
+          tokens: null, rounds: [], liveTokens: { target: 0, simulator: 0 },
         }
-        return { ...r, agents: { ...r.agents, [event.agent_id]: { ...prev, status: 'talking', turns: [...prev.turns, event.turn] } } }
+        const t = event.turn.tokens?.total ?? 0
+        const liveTokens = {
+          target: prev.liveTokens.target + (event.turn.by === 'target' ? t : 0),
+          simulator: prev.liveTokens.simulator + (event.turn.by === 'simulator' ? t : 0),
+        }
+        return { ...r, agents: { ...r.agents, [event.agent_id]: { ...prev, status: 'talking', turns: [...prev.turns, event.turn], liveTokens } } }
       })
       break
     case 'agent_feedback':
       patchRun(event.session_id, (r) => {
         const prev = r.agents[event.agent_id]
         if (!prev) return r
-        return { ...r, agents: { ...r.agents, [event.agent_id]: { ...prev, status: event.status, score: event.score, feedback: event.feedback } } }
+        return {
+          ...r,
+          agents: {
+            ...r.agents,
+            [event.agent_id]: { ...prev, status: event.status, score: event.score, feedback: event.feedback, tokens: event.tokens, rounds: event.rounds },
+          },
+        }
       })
       logLine(`[${event.session_id}] ${event.agent_name} scored the model ${event.score}/100`)
       break
+    case 'progress': {
+      const { event: _e, session_id, ...progress } = event
+      void _e
+      patchRun(session_id, (r) => ({ ...r, stage: progress.stage as SessionStage, progress: progress as Progress }))
+      break
+    }
     case 'session_done':
       patchRun(event.session.id, (r) => ({ ...r, stage: event.session.stage, session: event.session }))
       logLine(`[${event.session.id}] ${event.session.model} final ${event.session.final_score ?? '—'} (benchmarks ${event.session.benchmark_score}, agents ${event.session.agent_score})`)

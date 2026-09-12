@@ -66,10 +66,30 @@ Set `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` to write to a real Neo4j
 schema is used. The session page renders the graph (model at the centre, one spoke per agent, turns
 along the spoke, feedback beyond) and shows the Cypher; with Neo4j the query box is live.
 
-**Pages.** `/evaluate` (pick models from the dropdown or type any id, choose agents, benchmarks,
-weights; live progress), `/sessions` (manage, re-run, delete), `/sessions/<id>` (final score, the two
-session scores, agent transcripts + feedback, benchmark items, graph), `/rankings` (our own
-leaderboard, with CN vs US averages), `/agents` (persona management + import).
+**Pages.** `/evaluate` — the arena: three setup cards (models with an access check, simulated
+users as clickable avatars that open a personality sheet, benchmarks + weights), a run bar with the
+call estimate, and live progress. `/sessions/<id>` — the output page: final score = benchmark +
+agent halves, the users' avatars with their scores, the **Neo4j interaction graph** (always
+visible), then tabs for feedback + transcripts, benchmark items, and tokens & timing. `/sessions`
+(manage, re-run, delete), `/rankings` (our own leaderboard with CN vs US averages), `/agents`
+(persona management + import). Design doc: `docs/SYSTEM_DESIGN.md`.
+
+**Progress, ETA and tokens.** A run streams a `progress` event after every model call:
+stage (`benchmark evaluation → simulated agents testing → scoring`), percent, elapsed time, an
+ETA (measured per-call rates; flagged `~` while it is still extrapolated), and running token
+spend split into benchmark calls, the model under test, and the simulator playing the personas.
+Finished sessions carry a full token breakdown per benchmark, per agent and per conversation
+round (**Tokens & timing** tab), plus wall-clock timings per stage.
+
+**Which models can this key call?** `POST /api/eval/models/probe` (or the *check which models this
+key can call* link on the Evaluate page) sends one tiny request per platform model and reports
+which ids answer and which return 403. On the current demo key that is `minimax/minimax-m3` and
+`moonshotai/kimi-k2.6`.
+
+**Robustness on real keys.** 429s are retried with exponential back-off and jitter (up to five
+times); at most four personas talk to the model at once; reasoning models get a 2 500-token budget
+for the feedback form and a truncated form is salvaged by regex; a persona whose verdict still
+cannot be parsed is marked `error`, excluded from the agent score and flagged on the output page.
 
 **Demo without credits.** `CANOPYWAVE_API_KEY=mock` (or `EVAL_MOCK=1`) fakes every model call
 deterministically, so the whole pipeline and UI can be exercised end to end.
@@ -145,8 +165,9 @@ Run the identical suite locally:
 - `GET /api/roles` — role → model map, role instructions, inference config
 - `POST /api/court/run` — run a case (see below)
 - `GET /api/eval/meta` — model catalog (CN/US), platform models, benchmarks, weights, graph backend
+- `POST /api/eval/models/probe` — which platform models this key can actually call
 - `POST /api/eval/run` · `POST /api/eval/run/stream` — evaluate one or more models (NDJSON stream of
-  `session_created`, `benchmark_item`, `benchmark_result`, `agent_turn`, `agent_feedback`, `session_done`)
+  `session_created`, `progress`, `benchmark_item`, `benchmark_result`, `agent_turn`, `agent_feedback`, `session_done`)
 - `GET|DELETE /api/eval/sessions[/{id}]` · `POST /api/eval/sessions/{id}/rerun/stream`
 - `GET /api/eval/sessions/{id}/graph` — nodes + relationships for the session (Neo4j or in-memory)
 - `GET /api/eval/rankings` — leaderboard across completed sessions

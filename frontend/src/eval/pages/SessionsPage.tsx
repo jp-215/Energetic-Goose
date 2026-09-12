@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { deleteSession, fetchSessions } from '../api'
 import { fmt, scoreColor } from '../components/ScoreTile'
 import { useEvalStore } from '../store'
-import { REGION_FLAG, type SessionSummary } from '../types'
+import { REGION_FLAG, fmtDuration, fmtTokens, type SessionSummary } from '../types'
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -41,20 +41,26 @@ export default function SessionsPage() {
           <thead>
             <tr>
               <th>model</th><th>label</th><th>created</th><th>status</th>
-              <th className="num">bench</th><th className="num">agents</th><th className="num">final</th><th></th>
+              <th className="num">bench</th><th className="num">agents</th><th className="num">final</th><th className="num">tokens</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 && <tr><td colSpan={8} className="muted">No sessions yet. <Link to="/evaluate">Run one →</Link></td></tr>}
+            {visible.length === 0 && <tr><td colSpan={9} className="muted">No sessions yet. <Link to="/evaluate">Run one →</Link></td></tr>}
             {visible.map((s) => (
               <tr key={s.id} className="clickable" onClick={() => navigate(`/sessions/${s.id}`)}>
                 <td>{REGION_FLAG[s.region] ?? ''} <b>{s.model}</b><div className="muted small">{s.id}</div></td>
                 <td className="muted">{s.label || '—'}</td>
                 <td className="small">{new Date(s.created_at).toLocaleString()}</td>
-                <td><span className={`pill pill-${s.status}`}>{s.status === 'running' ? s.stage : s.status}</span></td>
+                <td>
+                  <span className={`pill pill-${s.status}`}>{s.status === 'running' ? s.stage : s.status}</span>
+                  {s.status === 'running' && s.percent != null && (
+                    <div className="muted small">{s.percent.toFixed(0)}%{s.eta_s != null ? ` · ~${fmtDuration(s.eta_s)} left` : ''}</div>
+                  )}
+                </td>
                 <td className="num">{fmt(s.benchmark_score)}</td>
                 <td className="num">{fmt(s.agent_score)}</td>
                 <td className="num" style={{ color: scoreColor(s.final_score), fontWeight: 700 }}>{fmt(s.final_score)}</td>
+                <td className="num muted">{fmtTokens(s.total_tokens)}</td>
                 <td className="actions" onClick={(e) => e.stopPropagation()}>
                   <button className="link-button" disabled={running} onClick={() => { navigate('/evaluate'); void rerun(s.id) }}>↻ rerun</button>
                   <button className="link-button danger" onClick={async () => { if (confirm(`Delete session ${s.id}?`)) { await deleteSession(s.id); void load() } }}>delete</button>

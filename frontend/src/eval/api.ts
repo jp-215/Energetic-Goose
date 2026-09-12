@@ -3,6 +3,7 @@ import type {
   EvalMeta,
   EvaluationPayload,
   GraphResponse,
+  ModelProbeResult,
   Persona,
   RankingEntry,
   Session,
@@ -71,6 +72,13 @@ export const fetchRankings = () =>
   fetch('/api/eval/rankings').then((r) =>
     json<{ rankings: RankingEntry[]; weights: { benchmark: number; agents: number } }>(r),
   )
+
+export const probeModels = (models?: string[]) =>
+  fetch('/api/eval/models/probe', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(models ? { models } : {}),
+  }).then((r) => json<{ results: ModelProbeResult[]; accessible: string[] }>(r))
 
 export const runCypher = (query: string) =>
   fetch('/api/eval/graph/cypher', {
