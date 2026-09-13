@@ -11,6 +11,8 @@ export const LABEL_COLORS: Record<string, string> = {
   Feedback: '#f778ba',
   Benchmark: '#d29922',
   Turn: '#8b98a9',
+  Paper: '#a371f7',
+  KnowledgeNode: '#39c5cf',
 }
 
 function title(n: GraphNode): string {
@@ -28,6 +30,10 @@ function title(n: GraphNode): string {
       return String(p.display_name ?? p.name ?? '')
     case 'Turn':
       return `#${p.index} ${p.role === 'user' ? 'asks' : 'replies'}`
+    case 'Paper':
+      return String(p.title ?? p.sourceId ?? '')
+    case 'KnowledgeNode':
+      return String(p.label ?? p.nodeId ?? '')
     default:
       return n.label
   }
@@ -39,7 +45,7 @@ function title(n: GraphNode): string {
  * spoke from the model outwards, the agent sits at the end of the spoke, and
  * its feedback just beyond. The session and the benchmarks it ran hang above.
  */
-function layout(nodes: GraphNode[], rels: GraphRelationship[]): { nodes: Node[]; edges: Edge[] } {
+function layoutSession(nodes: GraphNode[], rels: GraphRelationship[]): { nodes: Node[]; edges: Edge[] } {
   const agents = nodes.filter((n) => n.label === 'Agent')
   const benchmarks = nodes.filter((n) => n.label === 'Benchmark')
   const turnsByAgent = new Map<string, GraphNode[]>()
@@ -126,8 +132,69 @@ function layout(nodes: GraphNode[], rels: GraphRelationship[]): { nodes: Node[];
   return { nodes: rfNodes, edges: rfEdges }
 }
 
+/**
+ * Clustered layout for the papers corpus: each knowledge node sits on an
+ * outer ring and the papers that BELONGS_TO it orbit it as a topic
+ * constellation; SUPPORTS / SHARES_AUTHOR edges run between the clusters.
+ */
+function layoutPapers(nodes: GraphNode[], rels: GraphRelationship[]): { nodes: Node[]; edges: Edge[] } {
+  const pos = new Map<string, { x: number; y: number }>()
+  const kns = nodes.filter((n) => n.label === 'KnowledgeNode')
+  const papers = nodes.filter((n) => n.label === 'Paper')
+
+  const ringR = 480
+  kns.forEach((kn, i) => {
+    const ang = (i / Math.max(kns.length, 1)) * 2 * Math.PI - Math.PI / 2
+    pos.set(kn.id, { x: ringR * Math.cos(ang), y: ringR * Math.sin(ang) })
+  })
+
+  const papersByKn = new Map<string, GraphNode[]>()
+  const orphans: GraphNode[] = []
+  for (const p of papers) {
+    const knId = rels.find((r) => r.type === 'BELONGS_TO' && r.from === p.id)?.to
+    if (knId && pos.has(knId)) papersByKn.set(knId, [...(papersByKn.get(knId) ?? []), p])
+    else orphans.push(p)
+  }
+  for (const [knId, list] of papersByKn) {
+    const c = pos.get(knId)!
+    const r = Math.max(150, (list.length * 80) / (2 * Math.PI))
+    list.forEach((p, i) => {
+      const ang = (i / list.length) * 2 * Math.PI
+      pos.set(p.id, { x: c.x + r * Math.cos(ang), y: c.y + r * Math.sin(ang) })
+    })
+  }
+  orphans.forEach((p, i) => {
+    const ang = (i / Math.max(orphans.length, 1)) * 2 * Math.PI + Math.PI / 7
+    pos.set(p.id, { x: (ringR + 260) * Math.cos(ang), y: (ringR + 260) * Math.sin(ang) })
+  })
+
+  const rfNodes: Node[] = nodes.map((n) => ({
+    id: n.id,
+    position: pos.get(n.id) ?? { x: 0, y: 0 },
+    data: { label: title(n), raw: n },
+    className: `graph-node graph-node-${n.label.toLowerCase()}`,
+    style: { borderColor: LABEL_COLORS[n.label] ?? 'var(--border)' },
+  }))
+  const rfEdges: Edge[] = rels.map((r) => ({
+    id: r.id,
+    source: r.from,
+    target: r.to,
+    label: r.type === 'BELONGS_TO' ? undefined : r.type,
+    className: `graph-edge graph-edge-${r.type.toLowerCase()}`,
+    animated: r.type === 'SUPPORTS',
+    style: { opacity: r.type === 'BELONGS_TO' ? 0.3 : 0.75 },
+    labelStyle: { fill: 'var(--muted)', fontSize: 9 },
+    labelBgStyle: { fill: 'var(--bg)', fillOpacity: 0.85 },
+  }))
+  return { nodes: rfNodes, edges: rfEdges }
+}
+
 export default function GraphView({ graph }: { graph: GraphResponse }) {
-  const { nodes, edges } = useMemo(() => layout(graph.nodes, graph.relationships), [graph])
+  const isPapers = graph.nodes.some((n) => n.label === 'Paper' || n.label === 'KnowledgeNode')
+  const { nodes, edges } = useMemo(
+    () => (isPapers ? layoutPapers(graph.nodes, graph.relationships) : layoutSession(graph.nodes, graph.relationships)),
+    [graph, isPapers],
+  )
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [hideSessionEdges, setHideSessionEdges] = useState(true)
   useEffect(() => setSelected(null), [graph])
@@ -139,17 +206,19 @@ export default function GraphView({ graph }: { graph: GraphResponse }) {
     <div className="graph-wrap">
       <div className="graph-toolbar">
         <div className="graph-legend">
-          {Object.entries(LABEL_COLORS).map(([label, color]) => (
+          {Object.entries(LABEL_COLORS).filter(([label]) => counts[label] != null).map(([label, color]) => (
             <span key={label} className="legend-item">
               <span className="legend-dot" style={{ background: color }} /> {label}
-              {counts[label] != null && <span className="muted"> ×{counts[label]}</span>}
+              <span className="muted"> ×{counts[label]}</span>
             </span>
           ))}
         </div>
-        <label className="check small">
-          <input type="checkbox" checked={hideSessionEdges} onChange={(e) => setHideSessionEdges(e.target.checked)} />
-          hide IN_SESSION edges
-        </label>
+        {!isPapers && (
+          <label className="check small">
+            <input type="checkbox" checked={hideSessionEdges} onChange={(e) => setHideSessionEdges(e.target.checked)} />
+            hide IN_SESSION edges
+          </label>
+        )}
       </div>
       <div className="graph-canvas">
         <ReactFlow

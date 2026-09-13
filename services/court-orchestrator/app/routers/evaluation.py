@@ -86,6 +86,13 @@ async def session_graph(session_id: str) -> Dict[str, Any]:
     return eval_handler.session_graph(session_id)
 
 
+@router.get("/graph/papers", response_model=GraphResponse)
+async def papers_graph() -> Dict[str, Any]:
+    """Papers & knowledge corpus from the shared Neo4j instance (409 when the
+    in-memory fallback graph is active)."""
+    return eval_handler.papers_graph()
+
+
 @router.get("/rankings", response_model=RankingsResponse)
 async def rankings() -> Dict[str, Any]:
     return eval_handler.rankings()

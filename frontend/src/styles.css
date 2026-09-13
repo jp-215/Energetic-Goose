@@ -651,6 +651,8 @@ a.run-button.small {
 .graph-node-session { font-weight: 700; }
 .graph-node-turn { border-radius: 999px !important; font-size: 10px !important; padding: 3px 8px !important; opacity: 0.85; }
 .graph-node-feedback { border-style: dashed; }
+.graph-node-paper { max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 999px !important; font-size: 10px !important; padding: 4px 10px !important; opacity: 0.92; }
+.graph-node-knowledgenode { font-weight: 800; font-size: 12px !important; border-width: 3px; box-shadow: 0 0 24px rgba(57, 197, 207, 0.3); }
 .graph-inspector {
   position: absolute; top: 10px; right: 10px; width: 320px; max-height: calc(100% - 20px); overflow: auto;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px;

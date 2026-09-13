@@ -68,6 +68,9 @@ export const deleteSession = (id: string) =>
 export const fetchSessionGraph = (id: string) =>
   fetch(`/api/eval/sessions/${encodeURIComponent(id)}/graph`).then((r) => json<GraphResponse>(r))
 
+export const fetchPapersGraph = () =>
+  fetch('/api/eval/graph/papers').then((r) => json<GraphResponse>(r))
+
 export const fetchRankings = () =>
   fetch('/api/eval/rankings').then((r) =>
     json<{ rankings: RankingEntry[]; weights: { benchmark: number; agents: number } }>(r),

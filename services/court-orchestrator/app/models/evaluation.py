@@ -229,6 +229,7 @@ class CatalogEntry(BaseModel):
     id: str
     vendor: str
     region: str
+    description: str = ""
 
 
 class EvalMetaResponse(BaseModel):

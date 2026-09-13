@@ -307,12 +307,35 @@ class Neo4jGraphStore(GraphStore):
         "         to: elementId(endNode(r)), properties: properties(r)}] AS relationships"
     )
 
+    # Papers / knowledge corpus sharing this Neo4j instance with the
+    # interaction graph (separate labels, so the two coexist).
+    PAPERS_QUERY = (
+        "MATCH (n) WHERE n:Paper OR n:KnowledgeNode "
+        "OPTIONAL MATCH (n)-[r]-(m) WHERE m:Paper OR m:KnowledgeNode "
+        "WITH collect(DISTINCT n) + collect(DISTINCT m) AS ns, collect(DISTINCT r) AS rs "
+        "RETURN [x IN ns WHERE x IS NOT NULL | "
+        "        {id: elementId(x), label: head(labels(x)), properties: properties(x)}] AS nodes, "
+        "       [x IN rs WHERE x IS NOT NULL | "
+        "        {id: elementId(x), type: type(x), from: elementId(startNode(x)), "
+        "         to: elementId(endNode(x)), properties: properties(x)}] AS relationships"
+    )
+
     def session_subgraph(self, session_id: str) -> Dict[str, Any]:
         rows = self._run(self.SESSION_QUERY, sid=session_id)
         if not rows:
             return {"nodes": [], "relationships": []}
         row = rows[0]
         # n1/n2 collections overlap; dedupe by element id
+        nodes = {n["id"]: n for n in row["nodes"]}
+        rels = {r["id"]: r for r in row["relationships"]
+                if r["from"] in nodes and r["to"] in nodes}
+        return {"nodes": list(nodes.values()), "relationships": list(rels.values())}
+
+    def papers_subgraph(self) -> Dict[str, Any]:
+        rows = self._run(self.PAPERS_QUERY)
+        if not rows:
+            return {"nodes": [], "relationships": []}
+        row = rows[0]
         nodes = {n["id"]: n for n in row["nodes"]}
         rels = {r["id"]: r for r in row["relationships"]
                 if r["from"] in nodes and r["to"] in nodes}

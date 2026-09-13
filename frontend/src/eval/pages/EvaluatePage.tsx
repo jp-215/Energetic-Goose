@@ -29,7 +29,7 @@ export default function EvaluatePage() {
   }, [s.running])
 
   const catalogByRegion = useMemo(() => {
-    const groups: Record<string, { id: string; vendor: string }[]> = {}
+    const groups: Record<string, { id: string; vendor: string; description: string }[]> = {}
     for (const m of s.meta?.catalog ?? []) (groups[m.region] ??= []).push(m)
     return groups
   }, [s.meta])
@@ -94,7 +94,7 @@ export default function EvaluatePage() {
               )}
               {Object.entries(catalogByRegion).map(([region, models]) => (
                 <optgroup key={region} label={`${REGION_FLAG[region] ?? ''} ${region === 'CN' ? 'Chinese models' : region === 'US' ? 'US models' : region} (catalog)`}>
-                  {models.map((m) => <option key={m.id} value={m.id}>{m.id} — {m.vendor}{mark(m.id)}</option>)}
+                  {models.map((m) => <option key={m.id} value={m.id} title={m.description}>{m.id} — {m.vendor}{mark(m.id)}</option>)}
                 </optgroup>
               ))}
             </select>
@@ -115,11 +115,15 @@ export default function EvaluatePage() {
           <div className="selected-models">
             {s.selectedModels.length === 0 && <div className="muted small empty">Nothing selected yet — add one or more model ids above.</div>}
             {s.selectedModels.map((m) => {
-              const region = s.meta?.catalog.find((c) => c.id === m)?.region ?? (m.split('/')[0] ? '?' : '?')
+              const entry = s.meta?.catalog.find((c) => c.id === m)
+              const region = entry?.region ?? '?'
               return (
                 <div key={m} className="model-row">
                   <span className="model-flag">{REGION_FLAG[region] ?? '🌐'}</span>
-                  <span className="grow mono">{m}</span>
+                  <div className="grow">
+                    <div className="mono">{m}</div>
+                    {entry?.description && <div className="muted small ellipsis" title={entry.description}>{entry.description}</div>}
+                  </div>
                   {probed && s.probe[m] && <span className={`pill ${s.probe[m].accessible ? 'pill-ok' : 'pill-err'}`}>{s.probe[m].accessible ? 'ok' : '403'}</span>}
                   <button className="link-button danger" onClick={() => s.removeModel(m)}>remove</button>
                 </div>

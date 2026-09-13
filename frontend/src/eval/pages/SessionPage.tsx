@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { deleteSession, fetchSession, fetchSessionGraph, runCypher } from '../api'
+import { deleteSession, fetchPapersGraph, fetchSession, fetchSessionGraph, runCypher } from '../api'
 import GraphView from '../components/GraphView'
 import PersonaAvatar from '../components/PersonaAvatar'
 import PersonaModal from '../components/PersonaModal'
@@ -20,6 +20,8 @@ export default function SessionPage() {
   const [openPersona, setOpenPersona] = useState<string | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [graph, setGraph] = useState<GraphResponse | null>(null)
+  const [papers, setPapers] = useState<GraphResponse | null>(null)
+  const [papersNote, setPapersNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [params, setParams] = useSearchParams()
   const tabParam = params.get('tab')
@@ -49,6 +51,12 @@ export default function SessionPage() {
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+  useEffect(() => {
+    // The papers corpus is shared across sessions: fetch once, failures are non-fatal.
+    fetchPapersGraph()
+      .then(setPapers)
+      .catch((err) => setPapersNote(err instanceof Error ? err.message : String(err)))
+  }, [])
 
   if (error) return <div className="page"><div className="error-text">{error}</div></div>
   if (!session) return <div className="page muted">loading session…</div>
@@ -115,6 +123,19 @@ export default function SessionPage() {
           <span className="muted small">{graph ? `${graph.nodes.length} nodes · ${graph.relationships.length} relationships` : 'loading…'} · model at the centre, one spoke per user, turns along the spoke, feedback beyond</span>
         </div>
         {graph && <GraphPanel graph={graph} />}
+      </section>
+
+      <section className="panel graph-section">
+        <div className="card-title">
+          Neo4j papers &amp; knowledge graph
+          <span className={`pill ${papers ? 'pill-ok' : 'pill-warn'}`}>{papers ? 'shared Neo4j instance' : 'unavailable'}</span>
+          <span className="muted small">
+            {papers
+              ? `${papers.nodes.filter((n) => n.label === 'Paper').length} papers · ${papers.nodes.filter((n) => n.label === 'KnowledgeNode').length} knowledge nodes · papers cluster around the topic they belong to; SUPPORTS / SHARES_AUTHOR edges cross clusters`
+              : papersNote ?? 'loading…'}
+          </span>
+        </div>
+        {papers && <GraphPanel graph={papers} cypherTitle="Cypher for this graph" />}
       </section>
 
       <div className="tabs">
@@ -229,7 +250,7 @@ function BenchmarkCard({ bench }: { bench: BenchmarkResult }) {
   )
 }
 
-function GraphPanel({ graph }: { graph: GraphResponse }) {
+function GraphPanel({ graph, cypherTitle = 'Cypher for this session' }: { graph: GraphResponse; cypherTitle?: string }) {
   const [query, setQuery] = useState(graph.cypher)
   const [result, setResult] = useState<string | null>(null)
   const isNeo4j = graph.backend === 'neo4j'
@@ -237,7 +258,7 @@ function GraphPanel({ graph }: { graph: GraphResponse }) {
     <div>
       <GraphView graph={graph} />
       <details className="cypher">
-        <summary>Cypher for this session {isNeo4j ? '(editable, read-only queries)' : ''}</summary>
+        <summary>{cypherTitle} {isNeo4j ? '(editable, read-only queries)' : ''}</summary>
         <textarea className="field-input mono" rows={7} value={query} onChange={(e) => setQuery(e.target.value)} readOnly={!isNeo4j} />
         {isNeo4j && (
           <button className="run-button small" onClick={async () => {

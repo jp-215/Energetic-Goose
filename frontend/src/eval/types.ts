@@ -4,6 +4,7 @@ export interface CatalogEntry {
   id: string
   vendor: string
   region: string
+  description: string
 }
 
 export interface BenchmarkInfo {

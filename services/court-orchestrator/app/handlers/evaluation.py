@@ -36,7 +36,7 @@ from ..core.config import (
     is_mock_mode,
     model_region,
 )
-from ..core.graph import get_graph
+from ..core.graph import Neo4jGraphStore, get_graph
 from ..core.llm import add_usage, chat, empty_usage
 from ..core.store import sessions as session_store
 from ..models.evaluation import EvaluationRequest
@@ -648,6 +648,29 @@ def session_graph(session_id: str) -> Dict[str, Any]:
         "cypher": SESSION_CYPHER.replace("$session_id", f'"{session_id}"'),
         **sub,
     }
+
+
+PAPERS_CYPHER = (
+    "MATCH (n) WHERE n:Paper OR n:KnowledgeNode\n"
+    "OPTIONAL MATCH (n)-[r]-(m) WHERE m:Paper OR m:KnowledgeNode\n"
+    "RETURN n, r, m"
+)
+
+
+def papers_graph() -> Dict[str, Any]:
+    """The papers / knowledge corpus living in the shared Neo4j instance
+    (same Aura DB as the interaction graph; separate labels)."""
+    g = get_graph()
+    if not isinstance(g, Neo4jGraphStore):
+        raise HTTPException(
+            status_code=409,
+            detail="papers graph requires the Neo4j backend (set NEO4J_URI)",
+        )
+    try:
+        sub = g.papers_subgraph()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"graph backend error: {exc}") from exc
+    return {"backend": g.backend, "session_id": "", "cypher": PAPERS_CYPHER, **sub}
 
 
 def graph_status() -> Dict[str, Any]:

@@ -175,6 +175,12 @@ def test_cypher_requires_neo4j(client):
     assert response.status_code == 409
 
 
+def test_papers_graph_requires_neo4j(client):
+    response = client.get("/api/eval/graph/papers")
+    assert response.status_code == 409
+    assert "Neo4j" in response.json()["detail"]
+
+
 def test_meta(client):
     body = client.get("/api/eval/meta").json()
     assert body["mock_mode"] is True

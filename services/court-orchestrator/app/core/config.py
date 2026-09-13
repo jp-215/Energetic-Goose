@@ -126,25 +126,115 @@ EVAL_CONFIG = {
 # in directly; the catalog is only a convenience.
 MODEL_CATALOG = [
     # Open-source models served by Canopy Wave (ids as listed by /v1/models)
-    {"id": "moonshotai/kimi-k2.6", "vendor": "Moonshot AI", "region": "CN"},
-    {"id": "moonshotai/kimi-k2.7-code", "vendor": "Moonshot AI", "region": "CN"},
-    {"id": "moonshotai/kimi-k2.7-code-highspeed", "vendor": "Moonshot AI", "region": "CN"},
-    {"id": "moonshotai/kimi-k3", "vendor": "Moonshot AI", "region": "CN"},
-    {"id": "minimax/minimax-m3", "vendor": "MiniMax", "region": "CN"},
-    {"id": "xiaomimimo/mimo-v2.5", "vendor": "Xiaomi", "region": "CN"},
-    {"id": "deepseek/deepseek-v4-flash", "vendor": "DeepSeek", "region": "CN"},
-    {"id": "deepseek/deepseek-v4-pro", "vendor": "DeepSeek", "region": "CN"},
-    {"id": "deepseek/deepseek-v4.1-flash", "vendor": "DeepSeek", "region": "CN"},
-    {"id": "qwen/qwen3.8-flash-next", "vendor": "Alibaba Qwen", "region": "CN"},
-    {"id": "zai/glm-5.2", "vendor": "Zhipu AI", "region": "CN"},
+    {
+        "id": "moonshotai/kimi-k2.6",
+        "vendor": "Moonshot AI",
+        "region": "CN",
+        "description": "Open-weight MoE flagship; strong agentic tool use and long-context reasoning.",
+    },
+    {
+        "id": "moonshotai/kimi-k2.7-code",
+        "vendor": "Moonshot AI",
+        "region": "CN",
+        "description": "K2.7 coding specialist; repo-scale code generation, debugging, agentic coding.",
+    },
+    {
+        "id": "moonshotai/kimi-k2.7-code-highspeed",
+        "vendor": "Moonshot AI",
+        "region": "CN",
+        "description": "Low-latency K2.7 code variant; tuned for fast, high-volume coding tasks.",
+    },
+    {
+        "id": "moonshotai/kimi-k3",
+        "vendor": "Moonshot AI",
+        "region": "CN",
+        "description": "Latest open-weight generation; frontier reasoning with native tool use.",
+    },
+    {
+        "id": "minimax/minimax-m3",
+        "vendor": "MiniMax",
+        "region": "CN",
+        "description": "Open-weight reasoning model; interleaved thinking, strong math and code.",
+    },
+    {
+        "id": "xiaomimimo/mimo-v2.5",
+        "vendor": "Xiaomi",
+        "region": "CN",
+        "description": "Compact open-weight model; efficient reasoning sized for edge deployments.",
+    },
+    {
+        "id": "deepseek/deepseek-v4-flash",
+        "vendor": "DeepSeek",
+        "region": "CN",
+        "description": "Lightweight V4 variant; fast general-purpose chat at low cost.",
+    },
+    {
+        "id": "deepseek/deepseek-v4-pro",
+        "vendor": "DeepSeek",
+        "region": "CN",
+        "description": "Flagship open-weight MoE; RL-trained deep reasoning for math, code, agents.",
+    },
+    {
+        "id": "deepseek/deepseek-v4.1-flash",
+        "vendor": "DeepSeek",
+        "region": "CN",
+        "description": "Latest efficiency line; better instruction following than v4-flash per token.",
+    },
+    {
+        "id": "qwen/qwen3.8-flash-next",
+        "vendor": "Alibaba Qwen",
+        "region": "CN",
+        "description": "Fast tier of the Qwen3.8 family; hybrid thinking modes, balanced quality/latency.",
+    },
+    {
+        "id": "zai/glm-5.2",
+        "vendor": "Zhipu AI",
+        "region": "CN",
+        "description": "Open-weight flagship; strong bilingual reasoning, coding, function calling.",
+    },
     # US frontier models (need a platform / key that serves them)
-    {"id": "openai/gpt-5", "vendor": "OpenAI", "region": "US"},
-    {"id": "openai/gpt-oss-120b", "vendor": "OpenAI", "region": "US"},
-    {"id": "anthropic/claude-sonnet-5", "vendor": "Anthropic", "region": "US"},
-    {"id": "anthropic/claude-opus-5", "vendor": "Anthropic", "region": "US"},
-    {"id": "google/gemini-3-pro", "vendor": "Google", "region": "US"},
-    {"id": "meta-llama/llama-4-maverick", "vendor": "Meta", "region": "US"},
-    {"id": "x-ai/grok-4", "vendor": "xAI", "region": "US"},
+    {
+        "id": "openai/gpt-5",
+        "vendor": "OpenAI",
+        "region": "US",
+        "description": "Frontier general model; balanced reasoning, instruction following, tool use.",
+    },
+    {
+        "id": "openai/gpt-oss-120b",
+        "vendor": "OpenAI",
+        "region": "US",
+        "description": "OpenAI open-weight 120B MoE; frontier-class quality on a single GPU node.",
+    },
+    {
+        "id": "anthropic/claude-sonnet-5",
+        "vendor": "Anthropic",
+        "region": "US",
+        "description": "Frontier reasoning with excellent coding and long-context handling.",
+    },
+    {
+        "id": "anthropic/claude-opus-5",
+        "vendor": "Anthropic",
+        "region": "US",
+        "description": "Top-tier reasoning depth for complex analysis and agentic work.",
+    },
+    {
+        "id": "google/gemini-3-pro",
+        "vendor": "Google",
+        "region": "US",
+        "description": "Frontier multimodal model; huge context, strong math and science reasoning.",
+    },
+    {
+        "id": "meta-llama/llama-4-maverick",
+        "vendor": "Meta",
+        "region": "US",
+        "description": "Open-weight MoE; natively multimodal with strong general and agent performance.",
+    },
+    {
+        "id": "x-ai/grok-4",
+        "vendor": "xAI",
+        "region": "US",
+        "description": "Frontier reasoning model with real-time knowledge orientation.",
+    },
 ]
 
 # Vendor prefix -> region, used to tag models that are not in the catalog.
