@@ -1,46 +1,8 @@
-# AI Court System
+# Model Evaluation Arena
 
-An AI court that deliberates cases using models hosted on **Canopy Wave** (OpenAI-compatible inference API). Three model roles:
-
-| Role | Job | Default model |
-|---|---|---|
-| **Simple Counsel** | Fast, direct read of the case | `moonshotai/kimi-k2.6` |
-| **Complex Counsel** | Deep analysis — precedent, counterarguments, edge cases | `minimax/minimax-m3` |
-| **Judge** | Weighs both opinions, issues the final verdict | `minimax/minimax-m3` |
-
-Flow: `case (context + query) → [simple ∥ complex] → judge → final verdict`
-
-The UI has two tabs sharing the same node-editor surface:
-
-| Tab | What it does |
-|---|---|
-| **Court** | The case flow above: intake → counsels → judge |
-| **Coding Hub** | A multi-agent dev team: a **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
-
-Hub flow: `brief → planner → [agent₁ ∥ agent₂ ∥ … (+ helpers)] → integrator → workspace`
-
-> The original prototype cast (`kimi-k2.7-code-highspeed` / `kimi-k3` / `mimo-v2.5`) is listed by `/models` but returns **403** for the current demo key. Swap roles back via the `COURT_*_MODEL` env vars once your plan unlocks them. Hugging Face-hosted models (via the HF SDKs) are a planned expansion.
-
-## Layout
-
-```
-notebooks/ai_court_prototype.ipynb   Research prototype (env setup → model calls → orchestration → demo docket)
-services/court-orchestrator/         The backend service :8000 — middleware chain, court logic, Canopy Wave calls
-  app/core/{benchmarks,agents,graph}.py   Model evaluation: benchmark runner, persona agents, Neo4j graph
-  app/data/benchmarks/               Bundled benchmark sample subsets (MMLU, GSM8K, ARC, TruthfulQA, HellaSwag)
-  app/data/personas/                 The five built-in persona agents
-workspaces/<run_id>/                 Coding Hub exports (git-ignored); .hub/run.json carries the full trace
-frontend/                            Vite + React + React Flow UI :5173 (court canvas, coding hub, evaluation pages)
-scripts/dev.sh                       Starts the backend service (creates .venv on first run)
-scripts/fetch_benchmarks.py          Pulls real benchmark rows from Hugging Face to replace the samples
-docker-compose.neo4j.yml             Optional local Neo4j for the interaction graph
-Demo/personas/extra_personas.json    Extra personalities to try the import feature
-```
-
-## Model evaluation (`/evaluate`)
-
-A second product on the same service: evaluate cutting-edge models (Chinese and US) with a
-score that is half open-source benchmarks and half feedback from simulated users.
+Evaluate cutting-edge models — Chinese and US — with a score that is **half open-source
+benchmarks and half feedback from simulated users**, then explore every session as a Neo4j
+graph. Runs on models hosted on **Canopy Wave** (OpenAI-compatible inference API).
 
 ```
 model id(s)  ─►  ① benchmark session   (MMLU, GSM8K, ARC-Challenge, TruthfulQA, HellaSwag)  ─► benchmark score
@@ -103,6 +65,45 @@ cannot be parsed is marked `error`, excluded from the agent score and flagged on
 
 **Demo without credits.** `CANOPYWAVE_API_KEY=mock` (or `EVAL_MOCK=1`) fakes every model call
 deterministically, so the whole pipeline and UI can be exercised end to end.
+
+## Also in this repo: the AI Court System
+
+The original product on the same service: an AI court that deliberates cases. Three model roles:
+
+| Role | Job | Default model |
+|---|---|
+| **Simple Counsel** | Fast, direct read of the case | `moonshotai/kimi-k2.6` |
+| **Complex Counsel** | Deep analysis — precedent, counterarguments, edge cases | `minimax/minimax-m3` |
+| **Judge** | Weighs both opinions, issues the final verdict | `minimax/minimax-m3` |
+
+Flow: `case (context + query) → [simple ∥ complex] → judge → final verdict`
+
+The UI has two tabs sharing the same node-editor surface:
+
+| Tab | What it does |
+|---|---|
+| **Court** | The case flow above: intake → counsels → judge |
+| **Coding Hub** | A multi-agent dev team: a **Planner** analyzes the brief, sizes the team, and assigns tasks; **Engineer** agents build concurrently and may **summon a helper** for a sub-task; an **Integrator** makes the workspace runnable. Every model call (prompt, model, latency, raw output) streams into a lifecycle panel, and the finished workspace can be exported to disk or published to GitHub. |
+
+Hub flow: `brief → planner → [agent₁ ∥ agent₂ ∥ … (+ helpers)] → integrator → workspace`
+
+> The original prototype cast (`kimi-k2.7-code-highspeed` / `kimi-k3` / `mimo-v2.5`) is listed by `/models` but returns **403** for the current demo key. Swap roles back via the `COURT_*_MODEL` env vars once your plan unlocks them. Hugging Face-hosted models (via the HF SDKs) are a planned expansion.
+
+## Layout
+
+```
+notebooks/ai_court_prototype.ipynb   Research prototype (env setup → model calls → orchestration → demo docket)
+services/court-orchestrator/         The backend service :8000 — middleware chain, court logic, Canopy Wave calls
+  app/core/{benchmarks,agents,graph}.py   Model evaluation: benchmark runner, persona agents, Neo4j graph
+  app/data/benchmarks/               Bundled benchmark sample subsets (MMLU, GSM8K, ARC, TruthfulQA, HellaSwag)
+  app/data/personas/                 The five built-in persona agents
+workspaces/<run_id>/                 Coding Hub exports (git-ignored); .hub/run.json carries the full trace
+frontend/                            Vite + React + React Flow UI :5173 (evaluation pages, court canvas, coding hub)
+scripts/dev.sh                       Starts the backend service (creates .venv on first run)
+scripts/fetch_benchmarks.py          Pulls real benchmark rows from Hugging Face to replace the samples
+docker-compose.neo4j.yml             Optional local Neo4j for the interaction graph
+Demo/personas/extra_personas.json    Extra personalities to try the import feature
+```
 
 ## Backend architecture
 
